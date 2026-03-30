@@ -523,6 +523,8 @@ async function loadTodayTransfers() {
   }
 }
 
+const activeTab = ref('active')
+
 const filters = reactive({
   keyword: '',
   platform: '',
@@ -638,6 +640,9 @@ const allAccounts = computed(() => accountStore.accounts)
 
 const filteredAccounts = computed(() => {
   return allAccounts.value.filter(acc => {
+    // Tab 过滤
+    if (activeTab.value === 'active' && acc.status !== 'active') return false
+    if (activeTab.value === 'frozen' && acc.status !== 'frozen') return false
     const cat = getAccountCategory(acc)
     if (filters.category && cat !== filters.category) return false
     if (filters.platform && acc.platform !== filters.platform) return false
