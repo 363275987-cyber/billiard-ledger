@@ -52,6 +52,36 @@ export const useAccountStore = defineStore('accounts', {
       return data
     },
 
+    async updateSequence(id, newSequence) {
+      const { data, error } = await supabase
+        .from('accounts')
+        .update({ sequence: newSequence })
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      const idx = this.accounts.findIndex(a => a.id === id)
+      if (idx >= 0) this.accounts[idx] = data
+      // 重新排序
+      this.accounts.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+      return data
+    },
+
+    async swapSequence(id1, id2) {
+      const acc1 = this.accounts.find(a => a.id === id1)
+      const acc2 = this.accounts.find(a => a.id === id2)
+      if (!acc1 || !acc2) return
+      const seq1 = acc1.sequence || 0
+      const seq2 = acc2.sequence || 0
+      // 临时值避免唯一约束冲突
+      await supabase.from('accounts').update({ sequence: -999 }).eq('id', id1)
+      await supabase.from('accounts').update({ sequence: seq1 }).eq('id', id2)
+      await supabase.from('accounts').update({ sequence: seq2 }).eq('id', id1)
+      acc1.sequence = seq2
+      acc2.sequence = seq1
+      this.accounts.sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
+    },
+
     async deleteAccount(id) {
       // 检查是否有关联订单
       const { count } = await supabase

@@ -1,9 +1,10 @@
 <template>
   <div>
     <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
       <h1 class="text-xl font-bold text-gray-800">🏦 账户管理</h1>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-2">
+        <button v-if="canManage" @click="openSortModal" class="px-3 py-2 bg-white text-gray-500 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition cursor-pointer">🔀 排序</button>
         <button
           v-if="authStore.isAdmin"
           @click="showLogModal = true"
@@ -48,12 +49,26 @@
       </div>
     </div>
 
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-4">
+      <button
+        @click="activeTab = 'active'"
+        :class="activeTab === 'active' ? 'bg-green-50 text-green-700 border-green-300 font-medium' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'"
+        class="px-4 py-2 rounded-lg text-sm border transition cursor-pointer"
+      >✅ 活跃账户</button>
+      <button
+        @click="activeTab = 'frozen'"
+        :class="activeTab === 'frozen' ? 'bg-gray-100 text-gray-700 border-gray-400 font-medium' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'"
+        class="px-4 py-2 rounded-lg text-sm border transition cursor-pointer"
+      >🔒 已停用账户</button>
+    </div>
+
     <!-- Filters -->
     <div class="bg-white rounded-xl border border-gray-100 p-4 mb-4 flex gap-3 items-center flex-wrap">
       <input
         v-model="filters.keyword"
         placeholder="🔍 搜索账户简称..."
-        class="px-3 py-2 border border-gray-200 rounded-lg text-sm w-56 outline-none focus:ring-2 focus:ring-blue-500"
+        class="px-3 py-2 border border-gray-200 rounded-lg text-sm w-full sm:w-56 outline-none focus:ring-2 focus:ring-blue-500"
       >
       <select
         v-model="filters.platform"
@@ -63,12 +78,13 @@
         <option v-for="(label, key) in PLATFORM_LABELS" :key="key" :value="key">{{ platformIcon(key) }} {{ label }}</option>
       </select>
       <select
-        v-model="filters.status"
+        v-model="filters.category"
         class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
       >
-        <option value="">全部状态</option>
-        <option value="active">✅ 活跃</option>
-        <option value="frozen">🔒 停用</option>
+        <option value="">全部分类</option>
+        <option value="ecommerce">🛒 电商账户</option>
+        <option value="company">🏢 企业账户</option>
+        <option value="personal">👤 个人账户</option>
       </select>
       <button
         @click="filters.hideZeroBalance = !filters.hideZeroBalance"
@@ -77,19 +93,6 @@
       >
         {{ filters.hideZeroBalance ? '💰 显示零余额' : '💵 隐藏零余额' }}
       </button>
-      <!-- View toggle -->
-      <div class="flex border border-gray-200 rounded-lg overflow-hidden">
-        <button
-          @click="viewMode = 'card'"
-          :class="viewMode === 'card' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-50'"
-          class="px-2.5 py-2 text-sm cursor-pointer transition"
-        >📐</button>
-        <button
-          @click="viewMode = 'list'"
-          :class="viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-50'"
-          class="px-2.5 py-2 text-sm cursor-pointer transition border-l border-gray-200"
-        >📋</button>
-      </div>
       <!-- Batch actions -->
       <template v-if="selectedIds.length > 0">
         <span class="text-sm text-blue-600 font-medium">已选 {{ selectedIds.length }} 项</span>
@@ -106,175 +109,8 @@
     <!-- Loading -->
     <Skeleton v-if="loading" type="card" :count="6" card-grid-class="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" />
 
-    <!-- Select All -->
-    <div v-if="viewMode === 'card' && !loading" class="flex items-center gap-2 mb-3 px-1">
-      <input
-        type="checkbox"
-        :checked="selectedIds.length === filteredAccounts.length && filteredAccounts.length > 0"
-        @change="selectedIds = $event.target.checked ? filteredAccounts.map(a => a.id) : []"
-        class="rounded cursor-pointer"
-      >
-      <span class="text-xs text-gray-400">全选</span>
-    </div>
-
-    <!-- Account Cards Grid -->
-    <div v-if="viewMode === 'card' && !loading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-      <div
-        v-for="acc in filteredAccounts"
-        :key="acc.id"
-        class="flex items-start gap-2"
-      >
-        <input
-          type="checkbox"
-          :checked="selectedIds.includes(acc.id)"
-          @change="toggleSelect(acc.id)"
-          @click.stop
-          class="mt-6 w-3.5 h-3.5 rounded cursor-pointer shrink-0 accent-blue-500"
-        >
-        <div class="account-card-container flex-1 group">
-          <div @click="openModal(acc)" class="absolute inset-0 z-[5] cursor-pointer"></div>
-          <div class="account-card-inner" :class="{ 'is-flipped': flippedCards[acc.id] }">
-            <!-- Front -->
-            <div class="account-card-front" :style="{ background: platformGradient(acc.platform) }">
-              <!-- Flip button -->
-              <button
-                @click="flipCard(acc.id)"
-                class="absolute top-2.5 right-2.5 w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/40 hover:text-white/80 text-xs transition z-10 cursor-pointer"
-                title="查看详情"
-              >↻</button>
-
-              <!-- Main content -->
-              <div class="flex flex-col justify-between p-4 h-full">
-                <div class="flex items-center gap-2.5">
-                  <!-- Platform logo (SVG) -->
-                  <div class="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                    <!-- weixin_video (check first since wechat is more common) -->
-                    <svg v-if="acc.ecommerce_platform === 'weixin_video'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-                    <!-- wechat -->
-                    <svg v-else-if="acc.platform === 'wechat'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.493 4.016c-3.819 0-6.923 2.597-6.923 5.8 0 3.204 3.104 5.8 6.923 5.8.753 0 1.476-.107 2.157-.305a.65.65 0 0 1 .544.074l1.44.84a.248.248 0 0 0 .127.042.224.224 0 0 0 .22-.226c0-.054-.022-.108-.036-.16l-.295-1.117a.449.449 0 0 1 .162-.503c1.433-1.017 2.336-2.56 2.336-4.245 0-3.203-3.103-5.8-6.923-5.8h.168zm-2.2 3.545c.487 0 .882.4.882.894a.888.888 0 0 1-.882.893.888.888 0 0 1-.882-.893c0-.494.395-.894.882-.894zm4.4 0c.487 0 .882.4.882.894a.888.888 0 0 1-.882.893.888.888 0 0 1-.882-.893c0-.494.395-.894.882-.894z"/></svg>
-                    <!-- alipay -->
-                    <svg v-else-if="acc.platform === 'alipay'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M21.422 15.358c-3.32-1.326-6.092-2.774-6.092-2.774s1.387-3.286 1.73-5.39h-4.668V5.327h5.783V4.006h-5.783V1.063h-2.562c-.425 0-.425.424-.425.424v2.52H3.625v1.32h5.783v1.866H4.364v1.32h9.632a20.578 20.578 0 0 1-1.06 3.227s-4.248-1.63-7.46-1.63c-2.696 0-3.423 1.73-3.423 2.898 0 3.305 4.086 4.7 8.154 4.7 3.292 0 5.945-1.373 7.298-2.326 1.97 1.493 5.807 3.084 5.807 3.084V15.358zM6.016 19.49c-3.29 0-4.008-1.63-4.008-2.655 0-1.275.99-2.165 3.07-2.165 2.55 0 5.09 1.144 6.536 1.935-1.27 1.38-3.178 2.885-5.598 2.885z"/></svg>
-                    <!-- douyin -->
-                    <svg v-else-if="acc.platform === 'douyin'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1 0-5.78 2.92 2.92 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 3.76.92V6.18a4.85 4.85 0 0 1-.03.51z"/></svg>
-                    <!-- kuaishou -->
-                    <svg v-else-if="acc.platform === 'kuaishou'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22z"/></svg>
-                    <!-- taobao -->
-                    <svg v-else-if="acc.platform === 'taobao'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 0 1 5.45 2.6L14 10.5l1 1 4.17-3.44A7 7 0 0 1 19 12a7 7 0 0 1-14 0 7 7 0 0 1 .83-3.3L9 11l1 1-2.33 3.88A7 7 0 0 1 12 5z"/></svg>
-                    <!-- youzan -->
-                    <svg v-else-if="acc.platform === 'youzan'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                    <!-- jd -->
-                    <svg v-else-if="acc.platform === 'jd'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    <!-- bank -->
-                    <svg v-else-if="acc.platform === 'bank'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
-                    <!-- cash -->
-                    <svg v-else-if="acc.platform === 'cash'" viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
-                    <!-- other fallback -->
-                    <svg v-else viewBox="0 0 24 24" class="w-5 h-5"><path fill="white" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-white leading-tight truncate">{{ acc.short_name || acc.code }}</div>
-                    <div class="text-[11px] text-white/50 mt-0.5">{{ platformLabel(acc.platform) }}</div>
-                  </div>
-                </div>
-                <div class="text-right">
-                  <div class="text-xl font-bold text-white tracking-wide">{{ formatMoney(acc.balance) }}</div>
-                </div>
-              </div>
-
-              <!-- Incomplete dot -->
-              <span v-if="isIncomplete(acc)" class="absolute top-2.5 left-2.5 z-10 w-2 h-2 bg-yellow-400 rounded-full ring-2 ring-white/30"></span>
-
-              <!-- Action buttons (hover only) -->
-              <div v-if="canManage" class="absolute bottom-2.5 left-2.5 flex items-center gap-0.5 z-[15] opacity-0 group-hover:opacity-100 transition-opacity">
-                <button @click.stop="toggleFreeze(acc)" class="text-[10px] text-white/30 hover:text-white/80 cursor-pointer" :title="acc.status === 'active' ? '停用' : '启用'">🔒</button>
-                <button v-if="canDelete" @click.stop="handleDelete(acc)" class="text-[10px] text-white/30 hover:text-white/80 cursor-pointer" title="删除">🗑️</button>
-              </div>
-            </div>
-
-            <!-- Back -->
-            <div class="account-card-back">
-            <button
-              @click="flipCard(acc.id)"
-              class="absolute top-2.5 right-2.5 w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-400 hover:text-gray-600 text-xs transition z-10 cursor-pointer"
-            >
-              ↩️
-            </button>
-
-            <div class="p-4 pt-8 space-y-2 text-sm">
-              <!-- Platform -->
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">平台</span>
-                <span>{{ platformIcon(acc.platform) }} {{ PLATFORM_LABELS[acc.platform] || acc.platform }}</span>
-              </div>
-
-              <!-- Real name certification -->
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">认证人</span>
-                <span :class="acc.real_name ? 'text-gray-700' : 'text-gray-300'">{{ acc.real_name || '未填写' }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">手机号</span>
-                <span :class="acc.cert_phone ? 'text-gray-700' : 'text-gray-300'">{{ acc.cert_phone || '未填写' }}</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">身份证</span>
-                <span :class="acc.id_number ? 'text-gray-700' : 'text-gray-300'">{{ acc.id_number ? maskIdNumber(acc.id_number) : '未填写' }}</span>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">创建时间</span>
-                <span class="text-gray-500 text-xs">{{ formatDate(acc.created_at, 'date') }}</span>
-              </div>
-              <div v-if="acc.payment_alias" class="flex items-center gap-2">
-                <span class="text-gray-400 text-xs w-16 shrink-0">付款简称</span>
-                <span class="text-blue-600 font-medium">{{ acc.payment_alias }}</span>
-              </div>
-
-              <!-- Manual balance edit -->
-              <div v-if="canManage" class="pt-2 border-t border-gray-100 mt-2">
-                <div class="flex items-center gap-1">
-                  <span class="text-gray-400 text-xs w-16 shrink-0">余额</span>
-                  <template v-if="editingBalanceId !== acc.id">
-                    <span class="font-medium" :class="acc.balance >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(acc.balance) }}</span>
-                    <button @click="startEditBalance(acc)" class="text-gray-300 hover:text-blue-500 text-xs cursor-pointer">✏️</button>
-                  </template>
-                  <template v-else>
-                    <input
-                      v-model.number="editingBalanceVal"
-                      type="number"
-                      step="0.01"
-                      class="w-24 px-2 py-0.5 border border-blue-300 rounded text-right text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                      @keyup.enter="saveBalanceEdit(acc)"
-                      @keyup.escape="cancelBalanceEdit"
-                    >
-                    <button @click="saveBalanceEdit(acc)" class="text-green-500 hover:text-green-700 text-xs cursor-pointer">✅</button>
-                    <button @click="cancelBalanceEdit" class="text-gray-300 hover:text-red-500 text-xs cursor-pointer">❌</button>
-                  </template>
-                </div>
-              </div>
-
-              <!-- Actions -->
-              <div v-if="canManage" class="flex items-center gap-2 pt-2 border-t border-gray-100 mt-2">
-                <button @click="viewTransactions(acc)" class="flex-1 text-center text-purple-600 hover:bg-purple-50 py-1.5 rounded-lg text-xs transition cursor-pointer">📊 明细</button>
-                <button @click="openModal(acc)" class="flex-1 text-center text-blue-600 hover:bg-blue-50 py-1.5 rounded-lg text-xs transition cursor-pointer">✏️ 编辑</button>
-                <button
-                  @click="toggleFreeze(acc)"
-                  class="flex-1 text-center py-1.5 rounded-lg text-xs transition cursor-pointer"
-                  :class="acc.status === 'active' ? 'text-orange-600 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'"
-                >
-                  {{ acc.status === 'active' ? '🔒 停用' : '🔓 启用' }}
-                </button>
-                <button v-if="canDelete" @click="handleDelete(acc)" class="flex-1 text-center text-red-400 hover:bg-red-50 py-1.5 rounded-lg text-xs transition cursor-pointer">🗑️ 删除</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Account List View -->
-    <div v-if="viewMode === 'list' && !loading" class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+    <div v-if="!loading" class="bg-white rounded-xl border border-gray-100 overflow-hidden">
       <table class="w-full text-sm">
         <thead class="bg-gray-50 border-b border-gray-100">
           <tr>
@@ -286,12 +122,12 @@
                 class="rounded cursor-pointer"
               >
             </th>
-            <th class="px-4 py-3 text-left text-gray-500 font-medium">简称</th>
-            <th class="px-4 py-3 text-left text-gray-500 font-medium">平台</th>
-            <th class="px-4 py-3 text-right text-gray-500 font-medium">余额</th>
-            <th class="px-4 py-3 text-center text-gray-500 font-medium">状态</th>
-            <th class="px-4 py-3 text-center text-gray-500 font-medium">信息</th>
-            <th class="px-4 py-3 text-right text-gray-500 font-medium">操作</th>
+            <th class="px-3 py-3 text-left text-gray-500 font-medium text-sm">简称</th>
+            <th class="px-3 py-3 text-left text-gray-500 font-medium text-sm hidden md:table-cell">平台</th>
+            <th class="px-3 py-3 text-right text-gray-500 font-medium text-sm">余额</th>
+            <th class="px-3 py-3 text-center text-gray-500 font-medium text-sm hidden sm:table-cell">状态</th>
+            <th class="px-3 py-3 text-center text-gray-500 font-medium text-sm hidden md:table-cell">信息</th>
+            <th class="px-3 py-3 text-right text-gray-500 font-medium text-sm">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -309,22 +145,23 @@
                 class="rounded cursor-pointer"
               >
             </td>
-            <td class="px-4 py-3 font-medium text-gray-800">{{ acc.short_name || acc.code }}</td>
-            <td class="px-4 py-3">{{ platformIcon(acc.platform) }} {{ platformLabel(acc.platform) }}</td>
-            <td class="px-4 py-3 text-right font-bold" :class="acc.balance >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(acc.balance) }}</td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-2.5 font-medium text-gray-800 text-sm">{{ acc.short_name || acc.code }}</td>
+            <td class="px-3 py-2.5 text-sm hidden md:table-cell">{{ platformIcon(acc.platform) }} {{ platformLabel(acc.platform) }}</td>
+            <td class="px-3 py-2.5 text-right font-bold text-sm" :class="acc.balance >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(acc.balance) }}</td>
+            <td class="px-3 py-2.5 text-center hidden sm:table-cell">
               <span class="text-xs px-2 py-0.5 rounded-full" :class="acc.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'">
                 {{ acc.status === 'active' ? '活跃' : '停用' }}
               </span>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-2.5 text-center hidden md:table-cell">
               <span v-if="isIncomplete(acc)" class="inline-block w-2 h-2 bg-red-500 rounded-full" title="信息不完整"></span>
               <span v-else class="inline-block w-2 h-2 bg-green-400 rounded-full" title="信息完整"></span>
             </td>
-            <td class="px-4 py-3 text-right" @click.stop>
-              <button @click="viewTransactions(acc)" class="text-gray-300 hover:text-purple-500 cursor-pointer" title="交易明细">📊</button>
-              <button @click="toggleFreeze(acc)" class="text-gray-300 hover:text-orange-500 cursor-pointer ml-1" :title="acc.status === 'active' ? '停用' : '启用'">{{ acc.status === 'active' ? '🔒' : '🔓' }}</button>
-              <button v-if="canDelete" @click="handleDelete(acc)" class="text-gray-300 hover:text-red-500 cursor-pointer ml-1" title="删除">🗑️</button>
+            <td class="px-3 py-2.5 text-right whitespace-nowrap" @click.stop>
+              <button @click="openModal(acc)" class="text-blue-500 hover:text-blue-700 text-xs cursor-pointer" title="详情">详情</button>
+              <button @click="viewTransactions(acc)" class="text-gray-400 hover:text-purple-500 cursor-pointer text-xs ml-1" title="交易明细">📊</button>
+              <button @click="toggleFreeze(acc)" class="text-gray-400 hover:text-orange-500 cursor-pointer text-xs ml-1">{{ acc.status === 'active' ? '🔒' : '🔓' }}</button>
+              <button v-if="canDelete" @click="handleDelete(acc)" class="text-gray-400 hover:text-red-500 cursor-pointer text-xs ml-1">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -364,6 +201,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">收款平台 <span class="text-red-400">*</span></label>
               <select
                 v-model="form.platform"
+                @change="autoCategory"
                 class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">请选择平台</option>
@@ -371,6 +209,20 @@
                   {{ platformIcon(key) }} {{ label }}
                 </option>
               </select>
+            </div>
+
+            <!-- Category Select -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">账户分类</label>
+              <select
+                v-model="form.category"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ecommerce">🛒 电商账户</option>
+                <option value="company">🏢 企业账户</option>
+                <option value="personal">👤 个人账户</option>
+              </select>
+              <p class="text-xs text-gray-400 mt-1">选择平台后会自动推荐分类，你也可以手动调整</p>
             </div>
 
             <!-- Short Name -->
@@ -565,6 +417,41 @@
       @close="showTxn = false"
     />
   </div>
+
+  <!-- 排序弹窗 -->
+  <Teleport to="body">
+    <div v-if="showSortModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showSortModal = false">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-5 border-b">
+          <h2 class="font-bold text-gray-800">🔀 账户排序</h2>
+          <button @click="showSortModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">✕</button>
+        </div>
+        <div class="p-5 text-sm text-gray-500 border-b bg-gray-50">
+          为每个账户输入排序序号（1排最前），全部填完后点确认
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-1">
+          <div v-for="(acc, idx) in allAccounts" :key="acc.id" class="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-gray-50">
+            <span class="text-gray-400 text-xs w-6 text-center">{{ idx + 1 }}</span>
+            <span class="flex-1 text-sm text-gray-700 truncate">{{ acc.short_name || acc.code }}</span>
+            <span class="text-xs text-gray-400">{{ platformIcon(acc.platform) }} {{ PLATFORM_LABELS[acc.platform] || '' }}</span>
+            <input
+              type="number"
+              min="1"
+              v-model.number="sortMap[acc.id]"
+              class="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="—"
+            />
+          </div>
+        </div>
+        <div class="p-5 border-t flex justify-end gap-3">
+          <button @click="showSortModal = false" class="px-4 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">取消</button>
+          <button @click="applySort" :disabled="sortSaving" class="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 cursor-pointer">
+            {{ sortSaving ? '保存中...' : '确认排序' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -586,7 +473,7 @@ const accountStore = useAccountStore()
 const loading = ref(true)
 const saving = ref(false)
 const showModal = ref(false)
-const viewMode = ref('card')
+
 const selectedIds = ref([])
 const showLogModal = ref(false)
 const balanceLogs = ref([])
@@ -639,12 +526,14 @@ async function loadTodayTransfers() {
 const filters = reactive({
   keyword: '',
   platform: '',
+  category: '',
   status: '',
   hideZeroBalance: false,
 })
 
 const defaultForm = () => ({
   platform: '',
+  category: '',
   short_name: '',
   real_name: '',
   cert_phone: '',
@@ -670,6 +559,31 @@ const PLATFORM_ICONS = {
   bank: '🏦',
   cash: '💵',
   other: '⚪',
+}
+
+// --- Account category ---
+const ECOMMERCE_PLATFORMS = ['douyin', 'weixin_video', 'taobao', 'kuaishou', 'youzan', 'jd', 'xiaohongshu', 'pinduoduo']
+const PERSONAL_PLATFORMS = ['wechat', 'alipay', 'cash', 'bank']
+const CATEGORY_LABELS = { ecommerce: '🛒 电商账户', company: '🏢 企业账户', personal: '👤 个人账户' }
+
+function getAccountCategory(acc) {
+  if (acc.category) return acc.category
+  // 根据 platform 自动推断
+  if (ECOMMERCE_PLATFORMS.includes(acc.platform)) return 'ecommerce'
+  if (PERSONAL_PLATFORMS.includes(acc.platform)) return 'personal'
+  return 'company'
+}
+
+function autoCategory() {
+  if (form.platform && !form.category) {
+    if (ECOMMERCE_PLATFORMS.includes(form.platform)) form.category = 'ecommerce'
+    else if (PERSONAL_PLATFORMS.includes(form.platform)) form.category = 'personal'
+    else form.category = 'company'
+  }
+}
+
+function categoryLabel(cat) {
+  return CATEGORY_LABELS[cat] || '🏢 企业账户'
 }
 
 function platformIcon(platform) {
@@ -724,8 +638,9 @@ const allAccounts = computed(() => accountStore.accounts)
 
 const filteredAccounts = computed(() => {
   return allAccounts.value.filter(acc => {
+    const cat = getAccountCategory(acc)
+    if (filters.category && cat !== filters.category) return false
     if (filters.platform && acc.platform !== filters.platform) return false
-    if (filters.status && acc.status !== filters.status) return false
     if (filters.hideZeroBalance && Number(acc.balance || 0) === 0) return false
     if (filters.keyword) {
       const kw = filters.keyword.toLowerCase()
@@ -883,6 +798,7 @@ function openModal(acc = null) {
     editingId.value = acc.id
     Object.assign(form, {
       platform: acc.platform || '',
+      category: acc.category || getAccountCategory(acc),
       short_name: acc.short_name || acc.code || '',
       real_name: acc.real_name || '',
       cert_phone: acc.cert_phone || '',
@@ -922,6 +838,7 @@ async function saveAccount() {
     if (isEditing.value) {
       const payload = {
         platform: form.platform,
+        category: form.category || null,
         short_name: form.short_name.trim(),
         real_name: form.real_name?.trim() || null,
         cert_phone: form.cert_phone?.trim() || null,
@@ -985,6 +902,7 @@ async function saveAccount() {
     } else {
       const payload = {
         platform: form.platform,
+        category: form.category || null,
         short_name: form.short_name.trim(),
         code: form.short_name.trim(),
         real_name: form.real_name?.trim() || null,
@@ -1013,6 +931,45 @@ async function saveAccount() {
     }
   } finally {
     saving.value = false
+  }
+}
+
+// --- 排序 ---
+const showSortModal = ref(false)
+const sortMap = reactive({})
+const sortSaving = ref(false)
+
+function openSortModal() {
+  // 初始化：用现有 sequence 填充，没有的留空
+  allAccounts.value.forEach(acc => {
+    sortMap[acc.id] = acc.sequence || 0
+  })
+  showSortModal.value = true
+}
+
+async function applySort() {
+  // 检查是否全部填了
+  const filled = allAccounts.value.filter(a => sortMap[a.id] && sortMap[a.id] > 0)
+  if (filled.length === 0) {
+    toast('请至少为一个账户填写排序序号', 'warning')
+    return
+  }
+  sortSaving.value = true
+  try {
+    // 逐个更新 sequence
+    for (const acc of filled) {
+      await supabase.from('accounts').update({ sequence: sortMap[acc.id] }).eq('id', acc.id)
+    }
+    // 刷新
+    accountStore._forceRefresh = true
+    await accountStore.fetchAccounts()
+    toast(`已更新 ${filled.length} 个账户的排序`, 'success')
+    showSortModal.value = false
+  } catch (e) {
+    console.error('排序失败:', e)
+    toast('排序失败', 'error')
+  } finally {
+    sortSaving.value = false
   }
 }
 
