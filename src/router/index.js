@@ -1,0 +1,80 @@
+import { createRouter, createWebHashHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
+
+const routes = [
+  { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { guest: true } },
+  { 
+    path: '/', 
+    component: () => import('../views/Layout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
+      { path: 'orders', name: 'Orders', component: () => import('../views/Orders.vue') },
+      { path: 'expenses', name: 'Expenses', component: () => import('../views/Expenses.vue') },
+      { path: 'expense-categories', name: 'ExpenseCategories', component: () => import('../views/ExpenseCategories.vue'), meta: { title: '支出类别管理' } },
+      { path: 'accounts', name: 'Accounts', component: () => import('../views/Accounts.vue') },
+      { path: 'transfers', name: 'Transfers', component: () => import('../views/Transfers.vue') },
+      { path: 'service-numbers', name: 'ServiceNumbers', component: () => import('../views/ServiceNumbers.vue'), meta: { title: '客服号管理' } },
+      { path: 'performance', name: 'Performance', component: () => import('../views/Performance.vue') },
+      { path: 'commission', name: 'Commission', component: () => import('../views/Commission.vue') },
+      { path: 'users', name: 'Users', component: () => import('../views/UserManagement.vue') },
+      { path: 'sales-groups', name: 'SalesGroups', component: () => import('../views/SalesGroups.vue') },
+      { path: 'refunds', name: 'Refunds', component: () => import('../views/Refunds.vue') },
+      { path: 'balance', name: 'Balance', component: () => import('../views/Balance.vue') },
+      { path: 'products', name: 'Products', component: () => import('../views/Products.vue') },
+      { path: 'customers', name: 'Customers', component: () => import('../views/Customers.vue') },
+      { path: 'reports', name: 'Reports', component: () => import('../views/Reports.vue') },
+      { path: 'product-sales', name: 'ProductSales', component: () => import('../views/ProductSales.vue') },
+      { path: 'legal-reports', name: 'LegalReports', component: () => import('../views/LegalReports.vue') },
+      { path: 'coaching', name: 'Coaching', component: () => import('../views/Coaching.vue') },
+      { path: 'platforms', name: 'Platforms', component: () => import('../views/Platforms.vue') },
+      { path: 'shareholder-loans', name: 'ShareholderLoans', component: () => import('../views/ShareholderLoans.vue') },
+      { path: 'logs', name: 'OperationLogs', component: () => import('../views/OperationLogs.vue'), meta: { title: '操作日志' } },
+      { path: 'assets', name: 'AssetManagement', component: () => import('../views/AssetManagement.vue') },
+      { path: 'platform-integration', name: 'PlatformIntegration', component: () => import('../views/PlatformIntegration.vue') },
+      { path: 'platform-orders', name: 'PlatformOrders', component: () => import('../views/PlatformOrders.vue') },
+      { path: 'settings', name: 'Settings', component: () => import('../views/Settings.vue'), meta: { adminOnly: true } },
+      { path: 'accounts/:id', name: 'AccountDetail', component: () => import('../views/AccountDetail.vue') },
+      { path: 'warehouses', name: 'Warehouses', component: () => import('../views/Warehouses.vue'), meta: { title: '仓库管理' } },
+      { path: 'inventory', name: 'Inventory', component: () => import('../views/Inventory.vue'), meta: { title: '库存管理' } },
+      { path: 'inventory-logs', name: 'InventoryLogs', component: () => import('../views/InventoryLogs.vue'), meta: { title: '库存流水' } },
+      { path: 'purchase-orders', name: 'PurchaseOrders', component: () => import('../views/PurchaseOrders.vue') },
+    ]
+  },
+  // 404
+  { path: '/:pathMatch(.*)*', redirect: '/' },
+]
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes,
+})
+
+// Auth guard — wait for auth initialization before checking
+router.beforeEach(async (to, from, next) => {
+  const auth = useAuthStore()
+  
+  // If auth is still loading, wait for it
+  if (auth.loading) {
+    await new Promise(resolve => {
+      const unwatch = auth.$subscribe(() => {
+        if (!auth.loading) {
+          unwatch()
+          resolve()
+        }
+      })
+      // Safety timeout: if loading takes too long, proceed anyway
+      setTimeout(() => { unwatch(); resolve() }, 3000)
+    })
+  }
+  
+  if (to.meta.requiresAuth && !auth.isLoggedIn) {
+    next('/login')
+  } else if (to.meta.guest && auth.isLoggedIn) {
+    next('/')
+  } else {
+    next()
+  }
+})
+
+export default router
