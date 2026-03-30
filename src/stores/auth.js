@@ -9,9 +9,14 @@ export const useAuthStore = defineStore('auth', {
   }),
   actions: {
     async init() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        await this.fetchProfile(session.user.id)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          await this.fetchProfile(session.user.id)
+        }
+      } catch (e) {
+        // token 失效时静默清除，跳转到登录页
+        await supabase.auth.signOut().catch(() => {})
       }
       this.loading = false
 

@@ -504,16 +504,30 @@
           <!-- 客服号 -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">客服号 <span class="text-red-400">*</span></label>
-            <select
-              v-model="form.service_number"
-              required
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">请选择客服号</option>
-              <option v-for="sn in availableServiceNumbers" :key="sn.code" :value="sn.code">
-                {{ sn.display }}
-              </option>
-            </select>
+            <div class="relative">
+              <input
+                v-model="snSearch"
+                @focus="snDropdownOpen = true"
+                @blur="closeSnDropdown"
+                placeholder="输入客服号或微信号搜索..."
+                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div v-if="selectedSnDisplay" class="text-xs text-green-600 mt-1">已选：{{ selectedSnDisplay }}</div>
+              <!-- 搜索下拉 -->
+              <div v-if="snDropdownOpen && filteredServiceNumbers.length > 0"
+                class="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div v-for="sn in filteredServiceNumbers" :key="sn.code"
+                  @mousedown.prevent="selectSn(sn)"
+                  class="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex justify-between items-center">
+                  <span>{{ sn.display }}</span>
+                  <span v-if="sn.wechat_name" class="text-xs text-gray-400">{{ sn.wechat_name }}</span>
+                </div>
+              </div>
+              <div v-if="snDropdownOpen && snSearch && filteredServiceNumbers.length === 0"
+                class="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-gray-400">
+                无匹配结果
+              </div>
+            </div>
           </div>
 
           <!-- 收款账户 -->
@@ -1391,6 +1405,8 @@ async function loadOrders() {
 
 // ---------- service numbers ----------
 const serviceNumbers = ref([])
+const snSearch = ref('')
+const snDropdownOpen = ref(false)
 
 const PAYMENT_METHODS = [
   { value: 'wechat', label: '微信收款' },
@@ -1427,14 +1443,40 @@ const availableServiceNumbers = computed(() => {
     return list.map(sn => ({
       code: sn.code,
       display: sn.sales_name ? `${sn.code} - ${sn.sales_name}` : `${sn.code} - (未分配)`,
+      wechat_name: sn.wechat_name || '',
     }))
   }
   // Sales/CS: only their own, mark with (我的)
   return list.map(sn => ({
     code: sn.code,
     display: sn.sales_id === authStore.profile?.id ? `${sn.code} (我的)` : `${sn.code}`,
+    wechat_name: sn.wechat_name || '',
   }))
 })
+
+const filteredServiceNumbers = computed(() => {
+  if (!snSearch.value) return availableServiceNumbers.value
+  const kw = snSearch.value.toLowerCase()
+  return availableServiceNumbers.value.filter(sn =>
+    sn.code.toLowerCase().includes(kw) || sn.display.toLowerCase().includes(kw) || sn.wechat_name.toLowerCase().includes(kw)
+  )
+})
+
+const selectedSnDisplay = computed(() => {
+  if (!form.service_number) return ''
+  const sn = availableServiceNumbers.value.find(s => s.code === form.service_number)
+  return sn ? sn.display + (sn.wechat_name ? ` (${sn.wechat_name})` : '') : ''
+})
+
+function selectSn(sn) {
+  form.service_number = sn.code
+  snSearch.value = ''
+  snDropdownOpen.value = false
+}
+
+function closeSnDropdown() {
+  setTimeout(() => { snDropdownOpen.value = false }, 200)
+}
 
 async function loadServiceNumbers() {
   try {
@@ -1871,6 +1913,8 @@ function openModal(order = null) {
     Object.assign(form, defaultForm())
   }
   showModal.value = true
+  snSearch.value = ''
+  snDropdownOpen.value = false
 }
 
 
