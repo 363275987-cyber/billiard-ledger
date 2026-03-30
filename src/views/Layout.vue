@@ -44,14 +44,6 @@
           <span class="text-base">📊</span>
           <span class="flex-1">收支总览</span>
         </router-link>
-        <router-link to="/orders"
-          class="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition relative"
-          :class="$route.path === '/orders' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50'"
-          @click="closeSidebar"
-        >
-          <span class="text-base">📝</span>
-          <span class="flex-1">订单登记</span>
-        </router-link>
 
         <template v-for="(group, gIndex) in menuGroups" :key="gIndex">
           <button
@@ -161,11 +153,11 @@ function closeSidebar() {
 const ROUTE_TITLES = {
   '/': '收支总览',
   '/orders': '订单登记',
-  '/expenses': '支出管理',
+  '/expenses': '收支登记',
   '/service-numbers': '客服号管理',
   '/accounts': '账户管理',
-  '/transfers': '账户转账',
-  '/refunds': '退款管理',
+  '/transfers': '转账提现',
+  '/refunds': '退款登记',
   '/balance': '余额快照',
   '/performance': '业绩统计',
   '/commission': '提成管理',
@@ -239,12 +231,23 @@ const menuGroups = computed(() => {
     return []
   }
 
+  // ✏️ 登记管理 — 日常登记操作
+  groups.push({
+    icon: '✏️',
+    label: '登记管理',
+    items: [
+      { label: '订单登记', path: '/orders' },
+      { label: '收支登记', path: '/expenses', badge: pendingCount.value || undefined },
+      { label: '退款登记', path: '/refunds' },
+      { label: '转账提现', path: '/transfers' },
+    ],
+  })
+
   // 📦 商品与订单 — 卖货相关
   groups.push({
     icon: '📦',
     label: '商品与订单',
     items: [
-      { label: '客服号管理', path: '/service-numbers' },
       { label: '产品库', path: '/products' },
       { label: '客户管理', path: '/customers' },
       { label: '外部订单', path: '/platform-orders' },
@@ -268,10 +271,8 @@ const menuGroups = computed(() => {
     icon: '💰',
     label: '财务管理',
     items: [
-      { label: '支出管理', path: '/expenses', badge: pendingCount.value || undefined },
+      { label: '客服号管理', path: '/service-numbers' },
       { label: '账户管理', path: '/accounts' },
-      { label: '账户转账', path: '/transfers' },
-      { label: '退款管理', path: '/refunds' },
       { label: '余额快照', path: '/balance' },
       { label: '股东垫资', path: '/shareholder-loans' },
       { label: '操作日志', path: '/logs' },

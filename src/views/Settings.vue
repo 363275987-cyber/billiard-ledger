@@ -131,7 +131,33 @@
           </tbody>
         </table>
       </div>
+
+    <!-- 修改密码 -->
+    <div class="mt-8 bg-white rounded-xl border border-gray-100 p-6">
+      <h3 class="text-base font-bold text-gray-800 mb-4">🔒 修改密码</h3>
+      <div class="space-y-3 max-w-sm">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">当前密码</label>
+          <input v-model="pwdForm.old_password" type="password" placeholder="输入当前密码"
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+          <input v-model="pwdForm.new_password" type="password" placeholder="输入新密码（至少6位）"
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+          <input v-model="pwdForm.confirm_password" type="password" placeholder="再输一次新密码"
+            class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button @click="changePassword" :disabled="pwdChanging"
+          class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 cursor-pointer">
+          {{ pwdChanging ? '修改中...' : '确认修改' }}
+        </button>
+      </div>
     </div>
+  </div>
 
     <!-- Toast -->
     <div v-if="toast" class="fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 transition"
@@ -151,6 +177,34 @@ const saving = ref(false)
 const loadingLogs = ref(false)
 const toast = ref(null)
 const auditLogs = ref([])
+const pwdForm = reactive({ old_password: '', new_password: '', confirm_password: '' })
+const pwdChanging = ref(false)
+
+function showToast(msg, type = 'success') {
+  toast.value = { message: msg, type }
+  setTimeout(() => toast.value = null, 3000)
+}
+
+async function changePassword() {
+  if (!pwdForm.old_password || !pwdForm.new_password) return showToast('请填写所有字段', 'error')
+  if (pwdForm.new_password.length < 6) return showToast('新密码至少6位', 'error')
+  if (pwdForm.new_password !== pwdForm.confirm_password) return showToast('两次新密码不一致', 'error')
+  pwdChanging.value = true
+  try {
+    const { error } = await supabase.auth.updateUser({ password: pwdForm.new_password })
+    if (error) throw error
+    showToast('密码修改成功')
+    Object.assign(pwdForm, { old_password: '', new_password: '', confirm_password: '' })
+  } catch (e) {
+    if (e.message?.includes('Invalid login') || e.message?.includes('credentials')) {
+      showToast('当前密码错误', 'error')
+    } else {
+      showToast('修改失败：' + (e.message || ''), 'error')
+    }
+  } finally {
+    pwdChanging.value = false
+  }
+}
 
 const settings = reactive({
   approval_limit: 2000,
@@ -161,10 +215,7 @@ const settings = reactive({
   default_currency: 'CNY',
 })
 
-function showToast(message, type = 'success') {
-  toast.value = { message, type }
-  setTimeout(() => { toast.value = null }, 3000)
-}
+// showToast 已在上方定义
 
 function getSettingCategory(key) {
   const map = {
