@@ -99,7 +99,7 @@
               </div>
               <div>
                 <span class="text-gray-400 text-xs">客户电话：</span>
-                <input v-model="order.customer_phone" maxlength="11" class="border rounded px-2 py-0.5 text-sm w-full bg-white" :class="order.customer_phone && !/^1[3-9]\d{9}$/.test(order.customer_phone) ? 'border-red-300' : 'border-gray-200'" />
+                <input v-model="order.customer_phone" maxlength="11" @blur="autoFillRowCustomer(order)" class="border rounded px-2 py-0.5 text-sm w-full bg-white" :class="order.customer_phone && !/^1[3-9]\d{9}$/.test(order.customer_phone) ? 'border-red-300' : 'border-gray-200'" />
               </div>
               <div>
                 <span class="text-gray-400 text-xs">金额：</span>
@@ -560,8 +560,9 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">客户电话</label>
               <input
                 v-model="form.customer_phone"
-                placeholder="手机号"
+                placeholder="手机号（输入后自动匹配老客户）"
                 maxlength="11"
+                @blur="autoFillCustomer"
                 class="w-full px-3 py-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 :class="form.customer_phone && !/^1[3-9]\d{9}$/.test(form.customer_phone) ? 'border-red-300 focus:ring-red-500' : 'border-gray-200 focus:ring-blue-500'"
               />
@@ -1915,6 +1916,44 @@ function openModal(order = null) {
   showModal.value = true
   snSearch.value = ''
   snDropdownOpen.value = false
+}
+
+
+// 手机号失焦时自动匹配老客户
+async function autoFillCustomer() {
+  const phone = form.customer_phone?.trim()
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return
+  try {
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('id, name, phone, address')
+      .eq('phone', phone)
+      .limit(1)
+    if (customers?.length > 0) {
+      const c = customers[0]
+      if (c.name && !form.customer_name) form.customer_name = c.name
+      if (c.address && !form.customer_address) form.customer_address = c.address
+      toast(`已匹配老客户：${c.name}`, 'info')
+    }
+  } catch (_) {}
+}
+
+// 列表模式下某行的自动填充
+async function autoFillRowCustomer(order) {
+  const phone = order.customer_phone?.trim()
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return
+  try {
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('id, name, phone, address')
+      .eq('phone', phone)
+      .limit(1)
+    if (customers?.length > 0) {
+      const c = customers[0]
+      if (c.name && !order.customer_name) order.customer_name = c.name
+      if (c.address && !order.customer_address) order.customer_address = c.address
+    }
+  } catch (_) {}
 }
 
 
