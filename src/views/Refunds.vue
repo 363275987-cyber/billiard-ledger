@@ -209,31 +209,15 @@
           <!-- 付款账户（从哪个账户退款给客户） -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">付款账户 <span class="text-red-400">*</span></label>
-            <div class="relative">
-              <input
-                v-model="accountSearch"
-                @focus="onAccountFocus"
-                @blur="setTimeout(() => showAccountDropdown = false, 200)"
-                placeholder="点击选择付款账户..."
-                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-              />
-              <button type="button" v-if="form.refund_from_account_id" @click="clearAccountSelection" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 cursor-pointer">&times;</button>
-              <div v-if="showAccountDropdown"
-                class="absolute z-50 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                <template v-for="(accs, ip) in filteredAccountGroups" :key="ip">
-                  <div class="px-2 py-1 bg-gray-50 text-xs font-medium text-gray-400 sticky top-0">{{ ip }}</div>
-                  <div
-                    v-for="acc in accs" :key="acc.id"
-                    @mousedown.prevent="selectAccount(acc)"
-                    class="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
-                  >
-                    {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }}
-                    <span v-if="acc.balance != null" class="ml-2 text-xs text-gray-400">¥{{ Number(acc.balance).toFixed(0) }}</span>
-                  </div>
-                </template>
-                <div v-if="Object.keys(filteredAccountGroups).length === 0" class="text-center py-4 text-gray-400 text-sm">没有匹配的账户</div>
-              </div>
-            </div>
+            <select v-model="form.refund_from_account_id"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+              <option value="" disabled>请选择付款账户</option>
+              <optgroup v-for="(accs, ip) in accountsByIP" :key="ip" :label="ip || '未分组'">
+                <option v-for="acc in accs" :key="acc.id" :value="acc.id">
+                  {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }} · ¥{{ Number(acc.balance || 0).toFixed(0) }}
+                </option>
+              </optgroup>
+            </select>
           </div>
           <!-- Note -->
           <div>
@@ -410,10 +394,6 @@ function selectOrder(o) {
   // 自动设置付款账户为该订单的收款账户
   if (o.account_id && !form.refund_from_account_id) {
     form.refund_from_account_id = o.account_id
-    const acc = accounts.value.find(a => a.id === o.account_id)
-    if (acc) {
-      accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
-    }
   }
 
   // 加载订单产品明细
