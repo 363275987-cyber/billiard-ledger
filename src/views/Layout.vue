@@ -79,7 +79,7 @@
         </template>
       </nav>
 
-      <div class="p-3 border-t border-gray-100">
+      <div class="p-3 border-t border-gray-100 pb-20 md:pb-3">
         <button @click="handleLogout" class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition cursor-pointer">
           <span>退出登录</span>
         </button>
