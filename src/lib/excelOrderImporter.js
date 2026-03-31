@@ -567,3 +567,17 @@ export function matchProduct(productName, products) {
 
   return null
 }
+
+/**
+ * 通过 SKU 编码精确匹配（用于导入 Excel，聚水潭模式）
+ */
+export async function matchBySkuCode(skuCode, rpcFn) {
+  if (!skuCode || !rpcFn) return null
+  try {
+    const { data, error } = await rpcFn("match_product_by_sku_code", { p_sku_code: String(skuCode).trim() })
+    if (error || !data || !data.sku_id) return null
+    return data
+  } catch (e) {
+    return null
+  }
+}
