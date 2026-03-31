@@ -211,7 +211,7 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">付款账户 <span class="text-red-400">*</span></label>
             <div class="relative">
               <input
-                v-model="accountDisplay"
+                v-model="accountInputText"
                 @focus="onAccountFocus"
                 @blur="hideAccountDropdown"
                 placeholder="点击选择付款账户..."
@@ -332,25 +332,17 @@ const form = reactive({
   note: '',
 })
 
-const orderSearch = ref('')
-const accountSearch = ref('')
-const showOrderDropdown = ref(false)
+// 付款账户输入文本（可读写，用于搜索和显示）
+const accountInputText = ref('')
 const showAccountDropdown = ref(false)
 const orderProducts = ref([]) // 选中订单的产品明细
 
-// 付款账户显示文本（选中后显示名称，聚焦时清空以便搜索）
-const accountDisplay = computed(() => {
-  if (accountSearch.value) return accountSearch.value
-  const acc = accounts.value.find(a => a.id === form.refund_from_account_id)
-  return acc ? `${acc.code}${acc.short_name ? ` (${acc.short_name})` : ''}` : ''
-})
-
-// blur 延迟关闭（避免点击下拉项时立刻关闭）
+// blur 延迟关闭
 function hideOrderDropdown() { setTimeout(() => showOrderDropdown.value = false, 200) }
 function hideAccountDropdown() { setTimeout(() => showAccountDropdown.value = false, 200) }
 
 // 聚焦付款账户时清空搜索文本，显示所有账户
-function onAccountFocus() { accountSearch.value = ''; showAccountDropdown.value = true }
+function onAccountFocus() { accountInputText.value = ''; showAccountDropdown.value = true }
 
 // 选中订单
 function selectOrder(o) {
@@ -360,6 +352,9 @@ function selectOrder(o) {
   showOrderDropdown.value = false
   if (o.account_id && !form.refund_from_account_id) {
     form.refund_from_account_id = o.account_id
+    // 更新付款账户显示文本
+    const acc = accounts.value.find(a => a.id === o.account_id)
+    accountInputText.value = acc ? `${acc.code}${acc.short_name ? ` (${acc.short_name})` : ''}` : ''
   }
   loadOrderProducts(o.id)
 }
@@ -374,7 +369,7 @@ function clearOrderSelection() {
 // 选中付款账户
 function selectAccount(acc) {
   form.refund_from_account_id = acc.id
-  accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
+  accountInputText.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
   showAccountDropdown.value = false
 }
 
@@ -411,9 +406,9 @@ const filteredOrders = computed(() => {
 // 账户搜索过滤（按退款使用频率排序 + 关键词过滤）
 const filteredAccountGroups = computed(() => {
   const allGroups = accountsByIP.value
-  if (!accountSearch.value) return allGroups
+  if (!accountInputText.value) return allGroups
 
-  const kw = accountSearch.value.toLowerCase()
+  const kw = accountInputText.value.toLowerCase()
   const filtered = {}
   for (const [ip, accs] of Object.entries(allGroups)) {
     const matched = accs.filter(a =>
@@ -529,7 +524,7 @@ function openRefundModal() {
   form.refund_from_account_id = ''
   form.note = ''
   orderSearch.value = ''
-  accountSearch.value = ''
+  accountInputText.value = ''
   orderProducts.value = []
   showOrderDropdown.value = false
   showAccountDropdown.value = false
