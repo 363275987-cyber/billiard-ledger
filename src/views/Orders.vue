@@ -331,6 +331,7 @@
             <th class="px-4 py-3 text-right font-medium">金额</th>
             <th class="px-4 py-3 text-left font-medium">业绩归属</th>
             <th class="px-4 py-3 text-center font-medium">来源</th>
+            <th class="px-4 py-3 text-center font-medium">平台</th>
             <th class="px-4 py-3 text-center font-medium">状态</th>
             <th class="px-4 py-3 text-center font-medium" v-if="canEdit">操作</th>
           </tr>
@@ -374,6 +375,14 @@
               </span>
             </td>
             <td class="px-4 py-3 text-center">
+              <template v-if="order.platform_type">
+                <span class="px-1.5 py-0.5 rounded text-xs" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
+              </template>
+              <span v-else class="text-gray-300 text-xs">—</span>
+              <div v-if="order.external_order_no" class="text-[10px] text-gray-400 font-mono mt-0.5 max-w-[100px] truncate" :title="order.external_order_no">{{ order.external_order_no }}</div>
+              <div v-if="order.sku_code" class="text-[10px] text-purple-400 font-mono">SKU: {{ order.sku_code }}</div>
+            </td>
+            <td class="px-4 py-3 text-center">
               <span
                 :class="[ORDER_STATUS[order.status]?.class, 'px-2 py-0.5 rounded text-xs']"
               >
@@ -401,7 +410,7 @@
             </td>
           </tr>
           <tr v-if="!orderStore.loading && orderStore.orders.length === 0">
-            <td :colspan="canEdit ? 11 : 10" class="px-4 py-16 text-center text-gray-400">
+            <td :colspan="canEdit ? 12 : 11" class="px-4 py-16 text-center text-gray-400">
               <div class="text-3xl mb-2">📭</div>
               <div>暂无订单数据</div>
             </td>
@@ -426,7 +435,9 @@
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span v-if="order.service_number_code" class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium flex-shrink-0">{{ order.service_number_code }}</span>
+            <span v-if="order.platform_type" class="px-1.5 py-0.5 rounded text-[10px] flex-shrink-0" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
             <span class="text-sm font-semibold text-green-600">{{ formatMoney(order.amount) }}</span>
+            <span v-if="order.platform_type && order.payment_amount > 0" class="text-[10px] text-gray-400">实收 {{ formatMoney(order.actual_income || order.payment_amount) }}</span>
           </div>
           <span
             :class="[ORDER_STATUS[order.status]?.class, 'px-2 py-0.5 rounded text-xs flex-shrink-0 ml-2']"
@@ -438,6 +449,8 @@
         <div class="text-xs text-gray-400 truncate mb-2">
           {{ PRODUCT_CATEGORIES[order.product_category] || order.product_category || '' }}
           <span v-if="order.product_name"> · {{ order.product_name }}</span>
+          <span v-if="order.external_order_no"> · <span class="font-mono">{{ order.external_order_no }}</span></span>
+          <span v-if="order.sku_code"> · SKU:{{ order.sku_code }}</span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-xs text-gray-400">{{ formatDate(order.created_at) }}</span>
@@ -989,6 +1002,254 @@
               </button>
             </div>
           </div>
+          <!-- 电商导入选项 - 始终显示 -->
+          <div class="mt-4 pt-4 border-t border-gray-200">
+            <button
+              @click="showImportModal = false; openEcommerceImportModal()"
+              class="w-full py-2.5 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition cursor-pointer"
+            >
+              🛒 电商订单导入（抖音/快手/视频号）
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Modal: E-commerce Import -->
+    <div
+      v-if="showEcommerceImportModal"
+      class="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+      @click.self="showEcommerceImportModal = false"
+      @dragover.prevent="isEcomDragging = true"
+      @dragleave.prevent="isEcomDragging = false"
+      @drop.prevent="handleEcomFileDrop"
+    >
+      <div class="bg-white rounded-2xl shadow-2xl w-full md:max-w-5xl md:mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <h2 class="font-bold text-gray-800">🛒 电商订单导入</h2>
+          <button @click="showEcommerceImportModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
+        </div>
+        <div class="p-6 overflow-y-auto">
+          <!-- Step 1: Upload -->
+          <div v-if="ecomImportStep === 'upload'" class="space-y-4">
+            <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
+              <p class="font-medium mb-1">📌 电商订单导入说明</p>
+              <ul class="list-disc list-inside space-y-1 text-xs text-blue-600">
+                <li>支持抖音、快手、视频号平台的销售订单和售后订单</li>
+                <li>自动识别 Sheet 名称判断平台（如"抖音-销售订单明细"）</li>
+                <li>销售订单自动匹配/创建对应电商账户并增加余额</li>
+                <li>售后订单自动匹配原始订单并扣减余额</li>
+                <li>通过 SKU 编码关联产品库</li>
+                <li>自动去重：已导入的订单号会跳过</li>
+              </ul>
+            </div>
+
+            <!-- Platform Selection -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">平台选择</label>
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="ecomPlatformMode" value="auto" class="rounded cursor-pointer">
+                  <span class="text-sm">自动识别（根据Sheet名称）</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="ecomPlatformMode" value="douyin" class="rounded cursor-pointer">
+                  <span class="text-sm text-pink-600">抖音</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="ecomPlatformMode" value="kuaishou" class="rounded cursor-pointer">
+                  <span class="text-sm text-orange-600">快手</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="ecomPlatformMode" value="shipinhao" class="rounded cursor-pointer">
+                  <span class="text-sm text-green-600">视频号</span>
+                </label>
+              </div>
+            </div>
+
+            <label v-if="!ecomImporting" class="cursor-pointer">
+              <div
+                class="border-2 border-dashed rounded-lg p-8 text-center transition"
+                :class="isEcomDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-400 hover:bg-green-50/30'"
+              >
+                <div class="text-3xl mb-2">📁</div>
+                <div class="text-sm text-gray-600">点击选择 Excel 文件，或拖拽到此处</div>
+                <div class="text-xs text-gray-400 mt-1">支持 .xlsx / .xls，可同时包含销售和售后Sheet</div>
+              </div>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                class="hidden"
+                @change="handleEcomFileSelect"
+              />
+            </label>
+            <div v-else class="border-2 border-dashed border-blue-300 rounded-lg p-8 text-center bg-blue-50/50">
+              <div class="text-3xl mb-2 animate-pulse">📊</div>
+              <div class="text-sm text-blue-600 font-medium">正在解析文件...</div>
+              <div class="text-xs text-blue-400 mt-1">大文件可能需要几十秒，请耐心等待</div>
+            </div>
+
+            <div v-if="ecomImportError" class="text-red-500 text-sm bg-red-50 rounded-lg px-3 py-2">
+              ⚠️ {{ ecomImportError }}
+            </div>
+          </div>
+
+          <!-- Step 2: Preview -->
+          <div v-if="ecomImportStep === 'preview'" class="space-y-4">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <h3 class="text-sm font-semibold text-gray-700">👁️ 数据预览</h3>
+              <div class="flex items-center gap-3 text-xs">
+                <label class="flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" :checked="isAllEcomSelected" @change="toggleAllEcomSelection" class="rounded cursor-pointer">
+                  <span>全选</span>
+                </label>
+                <span class="text-green-600">已选 {{ selectedEcomCount }} / {{ ecomAllOrders.length }} 条</span>
+              </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex items-center gap-2 border-b border-gray-200 pb-2">
+              <button
+                @click="ecomActiveTab = 'sales'"
+                :class="ecomActiveTab === 'sales' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'"
+                class="px-3 py-1 text-sm cursor-pointer"
+              >
+                销售订单 ({{ ecomSalesOrders.length }})
+              </button>
+              <button
+                @click="ecomActiveTab = 'aftersales'"
+                :class="ecomActiveTab === 'aftersales' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'"
+                class="px-3 py-1 text-sm cursor-pointer"
+              >
+                售后订单 ({{ ecomAfterSalesOrders.length }})
+              </button>
+            </div>
+
+            <!-- Stats -->
+            <div class="flex items-center gap-4 text-xs text-gray-500">
+              <span>跳过（无效/重复）: {{ ecomSkippedCount }} 条</span>
+              <span>已选销售金额: ¥{{ ecomSelectedSalesTotal }}</span>
+              <span>已选退款金额: ¥{{ ecomSelectedRefundTotal }}</span>
+            </div>
+
+            <!-- Sales Preview Table -->
+            <div v-if="ecomActiveTab === 'sales'" class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="overflow-x-auto max-h-[45vh] overflow-y-auto">
+                <table class="w-full text-xs">
+                  <thead class="sticky top-0 z-10">
+                    <tr class="bg-gray-50 text-gray-600">
+                      <th class="px-2 py-2 text-center w-8"><input type="checkbox" :checked="isAllEcomSalesSelected" @change="toggleEcomSalesAll" class="rounded cursor-pointer"></th>
+                      <th class="px-2 py-2 text-left font-medium">行号</th>
+                      <th class="px-2 py-2 text-center font-medium">平台</th>
+                      <th class="px-2 py-2 text-left font-medium">店铺</th>
+                      <th class="px-2 py-2 text-left font-medium">外部订单号</th>
+                      <th class="px-2 py-2 text-left font-medium">SKU编码</th>
+                      <th class="px-2 py-2 text-right font-medium">金额</th>
+                      <th class="px-2 py-2 text-left font-medium">状态</th>
+                      <th class="px-2 py-2 text-left font-medium">时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="order in ecomSalesOrders" :key="'s-' + order._rowIdx" class="border-t border-gray-100 hover:bg-green-50/30" :class="{ 'opacity-40': !order._selected }">
+                      <td class="px-2 py-1.5 text-center"><input type="checkbox" v-model="order._selected" class="rounded cursor-pointer"></td>
+                      <td class="px-2 py-1.5 text-gray-400">{{ order._rowIdx }}</td>
+                      <td class="px-2 py-1.5 text-center">
+                        <span class="px-1.5 py-0.5 rounded text-[10px]" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
+                      </td>
+                      <td class="px-2 py-1.5 text-gray-800">{{ order.platform_store || '—' }}</td>
+                      <td class="px-2 py-1.5 text-gray-600 font-mono max-w-[140px] truncate" :title="order.external_order_no">{{ order.external_order_no || '—' }}</td>
+                      <td class="px-2 py-1.5 text-gray-600 font-mono text-[10px]">{{ order.sku_code || '—' }}</td>
+                      <td class="px-2 py-1.5 text-right text-green-600 font-medium">{{ formatMoney(order.payment_amount) }}</td>
+                      <td class="px-2 py-1.5">
+                        <span class="px-1.5 py-0.5 rounded text-[10px]" :class="order.status === '已关闭' || order.status === '交易关闭' || order.status === '已取消' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'">{{ order.status }}</span>
+                      </td>
+                      <td class="px-2 py-1.5 text-gray-400 max-w-[120px] truncate" :title="order.order_time">{{ order.order_time || '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- After Sales Preview Table -->
+            <div v-if="ecomActiveTab === 'aftersales'" class="border border-gray-200 rounded-lg overflow-hidden">
+              <div class="overflow-x-auto max-h-[45vh] overflow-y-auto">
+                <table class="w-full text-xs">
+                  <thead class="sticky top-0 z-10">
+                    <tr class="bg-gray-50 text-gray-600">
+                      <th class="px-2 py-2 text-center w-8"><input type="checkbox" :checked="isAllEcomAfterSalesSelected" @change="toggleEcomAfterSalesAll" class="rounded cursor-pointer"></th>
+                      <th class="px-2 py-2 text-left font-medium">行号</th>
+                      <th class="px-2 py-2 text-center font-medium">平台</th>
+                      <th class="px-2 py-2 text-left font-medium">店铺</th>
+                      <th class="px-2 py-2 text-left font-medium">售后单号</th>
+                      <th class="px-2 py-2 text-left font-medium">关联订单号</th>
+                      <th class="px-2 py-2 text-right font-medium">退款金额</th>
+                      <th class="px-2 py-2 text-left font-medium">售后状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="refund in ecomAfterSalesOrders" :key="'a-' + refund._rowIdx" class="border-t border-gray-100 hover:bg-orange-50/30" :class="{ 'opacity-40': !refund._selected }">
+                      <td class="px-2 py-1.5 text-center"><input type="checkbox" v-model="refund._selected" class="rounded cursor-pointer"></td>
+                      <td class="px-2 py-1.5 text-gray-400">{{ refund._rowIdx }}</td>
+                      <td class="px-2 py-1.5 text-center">
+                        <span class="px-1.5 py-0.5 rounded text-[10px]" :class="ecomPlatformTagClass(refund.platform_type)">{{ platformTypeName(refund.platform_type) }}</span>
+                      </td>
+                      <td class="px-2 py-1.5 text-gray-800">{{ refund.platform_store || '—' }}</td>
+                      <td class="px-2 py-1.5 text-gray-600 font-mono max-w-[140px] truncate" :title="refund.refund_no">{{ refund.refund_no || '—' }}</td>
+                      <td class="px-2 py-1.5 text-gray-600 font-mono max-w-[140px] truncate" :title="refund.external_order_no">{{ refund.external_order_no || '—' }}</td>
+                      <td class="px-2 py-1.5 text-right text-red-500 font-medium">-{{ formatMoney(refund.refund_amount) }}</td>
+                      <td class="px-2 py-1.5">
+                        <span class="px-1.5 py-0.5 rounded text-[10px] bg-orange-50 text-orange-600">{{ refund.status }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="flex gap-3 pt-2">
+              <button @click="ecomImportStep = 'upload'; resetEcomImport()" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">← 重新上传</button>
+              <button @click="showEcommerceImportModal = false; resetEcomImport()" class="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">取消</button>
+              <button
+                @click="handleEcomImport"
+                :disabled="selectedEcomCount === 0 || ecomImporting"
+                class="flex-1 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+              >
+                {{ ecomImporting ? '⏳ 导入中...' : `✅ 确认导入 ${selectedEcomCount} 条` }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 3: Result -->
+          <div v-if="ecomImportStep === 'result'" class="space-y-4">
+            <div class="text-center py-4">
+              <div class="text-4xl mb-3">🎉</div>
+              <h3 class="text-lg font-bold text-gray-800 mb-2">导入完成</h3>
+              <div class="flex items-center justify-center gap-6">
+                <div class="text-center">
+                  <div class="text-2xl font-bold text-green-600">{{ ecomImportResult.success }}</div>
+                  <div class="text-xs text-gray-400">成功</div>
+                </div>
+                <div class="text-center">
+                  <div class="text-2xl font-bold text-yellow-500">{{ ecomImportResult.duplicate }}</div>
+                  <div class="text-xs text-gray-400">跳过（重复）</div>
+                </div>
+                <div v-if="ecomImportResult.failures.length > 0" class="text-center">
+                  <div class="text-2xl font-bold text-red-500">{{ ecomImportResult.failures.length }}</div>
+                  <div class="text-xs text-gray-400">失败</div>
+                </div>
+              </div>
+            </div>
+            <div v-if="ecomImportResult.failures.length > 0" class="bg-red-50 border border-red-100 rounded-lg p-3">
+              <div class="text-xs font-medium text-red-600 mb-2">失败的记录：</div>
+              <div class="space-y-1 max-h-32 overflow-y-auto">
+                <div v-for="(fail, idx) in ecomImportResult.failures" :key="idx" class="text-xs text-red-500">
+                  第 {{ fail.row }} 行：{{ fail.external_order_no || fail.refund_no || '' }} — {{ fail.message }}
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-center pt-2">
+              <button @click="showEcommerceImportModal = false; resetEcomImport()" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer transition">完成</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1006,6 +1267,7 @@ import { formatMoney, PRODUCT_CATEGORIES, ORDER_STATUS, ORDER_SOURCE as ORDER_SO
 import { parseOrderText, parsedToForm } from '../lib/orderParser'
 import { parseExcelFile, autoMatchColumns, downloadTemplate, mapRowsToOrders, IMPORT_FIELDS } from '../lib/excelImporter'
 import { parseJstExcel, parseDoudianExcel, detectExcelFormat, getFormatLabel, autoMatchJstColumns, autoMatchDoudianColumns, mapJstRowsToOrders, mapDoudianRowsToOrders, matchProduct } from '../lib/excelOrderImporter'
+import { parseEcommerceExcel, importEcommerceOrders, identifyPlatform, platformTypeName, getSalesSheets, getAfterSalesSheets } from '../lib/ecommerceOrderImporter'
 import { randomPick, randomPhone, randomName, randomAddress, randomAmount, PRODUCT_CATEGORIES_LIST, PRODUCT_NAMES_BY_CATEGORY } from '../lib/testDataHelper'
 import { usePermission } from '../composables/usePermission'
 import Skeleton from '../components/Skeleton.vue'
@@ -2231,11 +2493,12 @@ async function handleDelete(order) {
 }
 
 async function handleBatchDelete() {
+  if (!selectedOrders.value.length) return
   if (!confirm(`确定要删除选中的 ${selectedOrders.value.length} 条订单吗？`)) return
   try {
-    const { data, error } = await supabase.rpc('batch_delete_orders', { p_ids: selectedOrders.value })
+    const { error } = await supabase.from('orders').delete().in('id', selectedOrders.value)
     if (error) throw error
-    toast(`已删除 ${data?.deleted || 0} 条订单`, 'success')
+    toast(`已删除 ${selectedOrders.value.length} 条订单`, 'success')
     selectedOrders.value = []
     loadStats()
     loadOrders()
@@ -2286,6 +2549,155 @@ const jstColumnMap = ref({})
 const previewFilter = ref('')
 const previewStatusFilter = ref('')
 const previewPlatformFilter = ref('')
+
+// ---------- E-commerce Import ----------
+const showEcommerceImportModal = ref(false)
+const ecomImportStep = ref('upload') // upload | preview | result
+const ecomPlatformMode = ref('auto') // auto | douyin | kuaishou | shipinhao
+const ecomImporting = ref(false)
+const ecomImportError = ref('')
+const isEcomDragging = ref(false)
+const ecomSalesOrders = ref([])
+const ecomAfterSalesOrders = ref([])
+const ecomSkippedCount = ref(0)
+const ecomActiveTab = ref('sales')
+const ecomImportResult = ref({ success: 0, duplicate: 0, failures: [] })
+
+function resetEcomImport() {
+  ecomImportStep.value = 'upload'
+  ecomPlatformMode.value = 'auto'
+  ecomImporting.value = false
+  ecomImportError.value = ''
+  isEcomDragging.value = false
+  ecomSalesOrders.value = []
+  ecomAfterSalesOrders.value = []
+  ecomSkippedCount.value = 0
+  ecomActiveTab.value = 'sales'
+  ecomImportResult.value = { success: 0, duplicate: 0, failures: [] }
+}
+
+function openEcommerceImportModal() {
+  resetEcomImport()
+  showEcommerceImportModal.value = true
+}
+
+const ecomAllOrders = computed(() => [...ecomSalesOrders.value, ...ecomAfterSalesOrders.value])
+const selectedEcomCount = computed(() => ecomAllOrders.value.filter(o => o._selected).length)
+const isAllEcomSelected = computed(() => ecomAllOrders.value.length > 0 && ecomAllOrders.value.every(o => o._selected))
+const isAllEcomSalesSelected = computed(() => ecomSalesOrders.value.length > 0 && ecomSalesOrders.value.every(o => o._selected))
+const isAllEcomAfterSalesSelected = computed(() => ecomAfterSalesOrders.value.length > 0 && ecomAfterSalesOrders.value.every(o => o._selected))
+const ecomSelectedSalesTotal = computed(() => ecomSalesOrders.value.filter(o => o._selected).reduce((s, o) => s + (Number(o.payment_amount) || 0), 0))
+const ecomSelectedRefundTotal = computed(() => ecomAfterSalesOrders.value.filter(o => o._selected).reduce((s, o) => s + (Number(o.refund_amount) || 0), 0))
+
+function toggleAllEcomSelection(e) {
+  const val = e.target.checked
+  for (const order of ecomAllOrders.value) order._selected = val
+}
+function toggleEcomSalesAll(e) {
+  const val = e.target.checked
+  for (const order of ecomSalesOrders.value) order._selected = val
+}
+function toggleEcomAfterSalesAll(e) {
+  const val = e.target.checked
+  for (const order of ecomAfterSalesOrders.value) order._selected = val
+}
+
+function ecomPlatformTagClass(p) {
+  const classes = { douyin: 'bg-pink-50 text-pink-600', kuaishou: 'bg-orange-50 text-orange-600', shipinhao: 'bg-green-50 text-green-600' }
+  return classes[p] || 'bg-gray-100 text-gray-500'
+}
+
+async function handleEcomFileSelect(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  await processEcomImportFile(file)
+  e.target.value = ''
+}
+
+async function handleEcomFileDrop(e) {
+  isEcomDragging.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  const ext = file.name.split('.').pop().toLowerCase()
+  if (!['xlsx', 'xls'].includes(ext)) {
+    ecomImportError.value = '仅支持 .xlsx / .xls 格式'
+    return
+  }
+  await processEcomImportFile(file)
+}
+
+async function processEcomImportFile(file) {
+  ecomImportError.value = ''
+  ecomImporting.value = true
+
+  try {
+    // 解析 Excel
+    const data = new Uint8Array(await file.arrayBuffer())
+    const workbook = XLSX.read(data, { type: 'array' })
+    const sheetNames = workbook.SheetNames
+
+    const forcePlatform = ecomPlatformMode.value === 'auto' ? null : ecomPlatformMode.value
+
+    const { salesOrders, afterSalesOrders, skipped, errors } = parseEcommerceExcel(workbook, {
+      autoDetect: ecomPlatformMode.value === 'auto',
+      forcePlatform,
+    })
+
+    ecomSalesOrders.value = salesOrders
+    ecomAfterSalesOrders.value = afterSalesOrders
+    ecomSkippedCount.value = skipped
+
+    if (errors.length > 0) {
+      ecomImportError.value = errors.slice(0, 3).join('\n') + (errors.length > 3 ? `\n...共 ${errors.length} 条警告` : '')
+    }
+
+    if (salesOrders.length === 0 && afterSalesOrders.length === 0) {
+      ecomImportError.value = '未识别到有效的订单数据，请检查文件格式和Sheet名称'
+      ecomImporting.value = false
+      return
+    }
+
+    ecomImportStep.value = 'preview'
+  } catch (err) {
+    ecomImportError.value = '解析文件失败: ' + (err.message || '')
+  } finally {
+    ecomImporting.value = false
+  }
+}
+
+async function handleEcomImport() {
+  const selectedSales = ecomSalesOrders.value.filter(o => o._selected)
+  const selectedRefunds = ecomAfterSalesOrders.value.filter(o => o._selected)
+  if (selectedSales.length === 0 && selectedRefunds.length === 0) return
+
+  ecomImporting.value = true
+
+  try {
+    const result = await importEcommerceOrders({
+      salesOrders: selectedSales,
+      afterSalesOrders: selectedRefunds,
+      supabase,
+      onProgress: ({ type, current, total }) => {
+        const label = type === 'sales' ? '销售' : '售后'
+        console.log(`导入${label}: ${current + 1}/${total}`)
+      },
+    })
+
+    ecomImportResult.value = result
+    ecomImportStep.value = 'result'
+
+    // 刷新数据
+    loadStats()
+    loadOrders()
+    loadTodayOrdersData()
+    accountStore._forceRefresh = true
+    await accountStore.fetchAccounts()
+  } catch (err) {
+    ecomImportError.value = '导入失败: ' + (err.message || '')
+  } finally {
+    ecomImporting.value = false
+  }
+}
 
 // 产品库缓存（用于匹配）
 const allProductsCache = ref([])

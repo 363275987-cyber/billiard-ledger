@@ -1133,17 +1133,31 @@ function downloadSingleTemplate() {
 }
 
 function downloadBundleTemplate() {
-  // 套装模板：套装SKU编码, 套装名称, 成本价, 零售价, 库存, 子商品SKU编码, 子商品名称, 数量, 子商品成本价, 子商品零售价
-  // 每个套装有一个头部行（子商品编码为空）+ 多个子商品行
+  // 模板格式：左侧A-G为子商品明细，右侧I-K为套装价格
   const rows = [
-    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': 2499, '库存': 10, '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品成本价': '', '子商品零售价': '' },
-    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品成本价': 334, '子商品零售价': 1555 },
-    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAB001', '子商品名称': 'DBA风暴杆桶', '数量': 1, '子商品成本价': 90, '子商品零售价': 425 },
-    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '成本价': '', '零售价': 2899, '库存': 5, '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品成本价': '', '子商品零售价': '' },
-    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品成本价': 334, '子商品零售价': 1555 },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品零售价': '', '子商品成本价': '', '套装编码': 'TA001', '套装销售价': 2010.53, '套装成本价': 432.02 },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品零售价': 1555, '子商品成本价': 334, '套装编码': '', '套装销售价': '', '套装成本价': '' },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': 'DAB001', '子商品名称': 'DBA风暴杆桶', '数量': 1, '子商品零售价': 425, '子商品成本价': 90, '套装编码': '', '套装销售价': '', '套装成本价': '' },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': 'DAD001', '子商品名称': '靓仔台球巧克', '数量': 1, '子商品零售价': 5, '子商品成本价': 0.5, '套装编码': '', '套装销售价': '', '套装成本价': '' },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': 'DAD003', '子商品名称': 'DBA手套', '数量': 1, '子商品零售价': 10, '子商品成本价': 1.49, '套装编码': '', '套装销售价': '', '套装成本价': '' },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '子商品SKU编码': 'DAD008', '子商品名称': 'DBA大皮头', '数量': 1, '子商品零售价': 13, '子商品成本价': 3, '套装编码': '', '套装销售价': '', '套装成本价': '' },
+    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品零售价': '', '子商品成本价': '', '套装编码': 'TA002', '套装销售价': 2743.53, '套装成本价': 692.02 },
+    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品零售价': 1555, '子商品成本价': 334, '套装编码': '', '套装销售价': '', '套装成本价': '' },
   ]
   const ws = XLSX.utils.json_to_sheet(rows)
-  ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 10 }, { wch: 10 }]
+  ws['!cols'] = [
+    { wch: 12 }, // 套装SKU编码
+    { wch: 18 }, // 套装名称
+    { wch: 14 }, // 子商品SKU编码
+    { wch: 16 }, // 子商品名称
+    { wch: 6 },  // 数量
+    { wch: 10 }, // 子商品零售价
+    { wch: 10 }, // 子商品成本价
+    { wch: 2 },  // (空列间隔)
+    { wch: 10 }, // 套装编码
+    { wch: 10 }, // 套装销售价
+    { wch: 10 }, // 套装成本价
+  ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '套装')
   XLSX.writeFile(wb, '套装导入模板.xlsx')
@@ -1205,46 +1219,114 @@ async function parseSingleRows(rows) {
 
 async function parseBundleRows(rows) {
   const { data: existingSkus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock')
-  const { data: existingProducts } = await supabase.from('products').select('id, name, product_type').eq('status', 'active')
   const skuMap = {}
   ;(existingSkus || []).forEach(s => { skuMap[s.sku_code] = s })
-  const productMap = {}
-  ;(existingProducts || []).forEach(p => { productMap[p.name] = p })
 
-  // Group rows by 套装SKU编码
+  // Check if this is the user's format (dual-column: A-G items + I-K prices)
+  const firstRow = rows[0] || {}
+  const hasDualFormat = '套装编码' in firstRow && '套装销售价' in firstRow
+
   const bundleGroups = {}
-  for (const row of rows) {
-    const code = String(row['套装SKU编码'] || '').trim()
-    if (!code) continue
-    if (!bundleGroups[code]) bundleGroups[code] = { code, name: row['套装名称'] || '', cost_price: null, retail_price: null, stock: null, items: [] }
-    const g = bundleGroups[code]
-    if (row['成本价'] != null && g.cost_price === null) g.cost_price = Number(row['成本价'])
-    if (row['零售价'] != null && g.retail_price === null) g.retail_price = Number(row['零售价'])
-    if (row['库存'] != null && g.stock === null) g.stock = Number(row['库存'])
-    const childCode = String(row['子商品SKU编码'] || '').trim()
-    if (childCode) {
-      g.items.push({
-        childSkuCode: childCode,
-        childName: row['子商品名称'] || '',
-        quantity: Number(row['数量']) || 1,
-        cost_price: row['子商品成本价'] != null ? Number(row['子商品成本价']) : null,
-        retail_price: row['子商品零售价'] != null ? Number(row['子商品零售价']) : null,
-      })
+
+  if (hasDualFormat) {
+    // Dual-column format: A-G = item details, J(9)=套装编码, K(10)=套装销售价, L(11)=套装成本价
+    const getCell = (row, col) => row[Object.keys(row)[col]] !== undefined ? Object.values(row)[col] : ''
+    for (const row of rows) {
+      const code = String(row['套装SKU编码'] || '').trim()
+      const name = String(row['套装名称'] || '').trim()
+      const childCode = String(row['子商品SKU编码'] || '').trim()
+      const childName = String(row['子商品名称'] || '').trim()
+      const qty = row['数量']
+      const childRetail = row['子商品零售价']
+      const childCost = row['子商品成本价']
+      // Price columns (right side)
+      const priceCode = String(row['套装编码'] || '').trim()
+      const priceRetail = row['套装销售价']
+      const priceCost = row['套装成本价']
+
+      if (!code && !priceCode) continue
+      // Price-only row (no item data)
+      if (!code && priceCode) {
+        if (!bundleGroups[priceCode]) bundleGroups[priceCode] = { code: priceCode, name: '', retail_price: Number(priceRetail) || 0, cost_price: Number(priceCost) || 0, items: [] }
+        continue
+      }
+      if (!bundleGroups[code]) bundleGroups[code] = { code, name, retail_price: null, cost_price: null, items: [] }
+      const g = bundleGroups[code]
+      if (name && !g.name) g.name = name
+      if (childCode) {
+        g.items.push({
+          childSkuCode: childCode,
+          childName,
+          quantity: Number(qty) || 1,
+          childRetail: Number(childRetail) || 0,
+          childCost: Number(childCost) || 0,
+        })
+      }
+    }
+  } else {
+    // Standard single-column format
+    for (const row of rows) {
+      const code = String(row['套装SKU编码'] || '').trim()
+      if (!code) continue
+      if (!bundleGroups[code]) bundleGroups[code] = { code, name: row['套装名称'] || '', cost_price: null, retail_price: null, stock: null, items: [] }
+      const g = bundleGroups[code]
+      if (row['成本价'] != null && g.cost_price === null) g.cost_price = Number(row['成本价'])
+      if (row['零售价'] != null && g.retail_price === null) g.retail_price = Number(row['零售价'])
+      if (row['库存'] != null && g.stock === null) g.stock = Number(row['库存'])
+      const childCode = String(row['子商品SKU编码'] || '').trim()
+      if (childCode) {
+        g.items.push({
+          childSkuCode: childCode,
+          childName: row['子商品名称'] || '',
+          quantity: Number(row['数量']) || 1,
+          cost_price: row['子商品成本价'] != null ? Number(row['子商品成本价']) : null,
+          retail_price: row['子商品零售价'] != null ? Number(row['子商品零售价']) : null,
+        })
+      }
     }
   }
+
+  // Collect all unique child SKU codes that don't exist
+  const allChildCodes = new Set()
+  for (const code of Object.keys(bundleGroups)) {
+    bundleGroups[code].items.forEach(i => { if (i.childSkuCode) allChildCodes.add(i.childSkuCode) })
+  }
+  const missingSkuCodes = [...allChildCodes].filter(c => !skuMap[c])
+  // Auto-create missing child SKUs
+  let autoCreated = 0
+  for (const code of missingSkuCodes) {
+    // Find any item from any bundle that has this code, to get name/price
+    let foundName = code, foundCost = 0, foundRetail = 0
+    for (const g of Object.values(bundleGroups)) {
+      const item = g.items.find(i => i.childSkuCode === code)
+      if (item) { foundName = item.childName || code; foundCost = item.childCost || 0; foundRetail = item.childRetail || 0; break }
+    }
+    try {
+      const { data: product } = await supabase.from('products').insert({
+        name: foundName, cost_price: foundCost, retail_price: foundRetail,
+        product_type: 'single', status: 'active',
+      }).select().single()
+      const { data: sku } = await supabase.from('product_skus').insert({
+        product_id: product.id, sku_code: code,
+        cost_price: foundCost, retail_price: foundRetail, stock: 0,
+      }).select().single()
+      skuMap[code] = sku
+      autoCreated++
+    } catch (e) { console.error('自动创建单品失败:', code, e.message) }
+  }
+  if (autoCreated > 0) console.log(`Auto-created ${autoCreated} missing child SKUs`)
 
   const bundles = []
   for (const code of Object.keys(bundleGroups)) {
     const g = bundleGroups[code]
-    bundles.push({
-      ...g,
-      _isNew: !skuMap[code],
-      _existingSku: skuMap[code],
-    })
+    bundles.push({ ...g, _isNew: !skuMap[code], _existingSku: skuMap[code] })
   }
 
   importBundles.value = bundles
   importPreview.value = []
+  if (autoCreated > 0) {
+    toast(`自动创建了 ${autoCreated} 个缺失的子商品SKU`, 'info')
+  }
 }
 
 async function doImport() {
