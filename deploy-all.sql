@@ -245,3 +245,120 @@ BEGIN
   PERFORM settle_monthly_balances((to_char(NOW(), 'YYYY-MM') || '-01')::DATE + interval '1 month' - interval '1 day');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- 第四部分：修复客户相关 RPC
+-- ============================================================
+
+-- 9. 修复 get_customer_detail（移除不存在的列：payment_method, total_amount, prepaid_amount, balance_due, deleted_at）
+CREATE OR REPLACE FUNCTION get_customer_detail(p_customer_id uuid)
+RETURNS JSON AS $$
+DECLARE
+  v_customer RECORD;
+  v_orders json;
+  v_refunds json;
+  v_trend json;
+BEGIN
+  SELECT * INTO v_customer FROM customers WHERE id = p_customer_id;
+  IF NOT FOUND THEN RETURN NULL::json; END IF;
+
+  SELECT json_agg(row_to_json(o)) INTO v_orders
+  FROM (
+    SELECT o.id, o.order_no, o.product_category, o.product_name, o.amount,
+      o.status, o.order_source, o.note, o.created_at
+    FROM orders o WHERE o.customer_id = p_customer_id
+    ORDER BY o.created_at DESC
+  ) o;
+
+  SELECT json_agg(row_to_json(r)) INTO v_refunds
+  FROM (
+    SELECT r.refund_no, r.refund_amount, r.reason, r.status, r.created_at,
+      o.order_no, o.product_name
+    FROM refunds r JOIN orders o ON o.id = r.order_id
+    WHERE o.customer_id = p_customer_id
+    ORDER BY r.created_at DESC
+  ) r;
+
+  SELECT json_agg(row_to_json(m)) INTO v_trend
+  FROM (
+    SELECT to_char(m.month, 'YYYY-MM') AS month,
+      COALESCE(m.total_amount, 0)::numeric AS amount,
+      COALESCE(m.count, 0)::int AS orders
+    FROM (
+      SELECT date_trunc('month', created_at) AS month,
+        SUM(amount) AS total_amount, COUNT(*) AS count
+      FROM orders WHERE customer_id = p_customer_id
+        AND created_at >= now() - interval '12 months'
+      GROUP BY date_trunc('month', created_at)
+    ) m ORDER BY m.month
+  ) m;
+
+  RETURN json_build_object(
+    'customer', to_jsonb(v_customer),
+    'orders', COALESCE(v_orders, '[]'::json),
+    'refunds', COALESCE(v_refunds, '[]'::json),
+    'trend', COALESCE(v_trend, '[]'::json),
+    'avg_order_amount', CASE WHEN v_customer.total_orders > 0
+      THEN ROUND(v_customer.total_amount / v_customer.total_orders, 2) ELSE 0 END
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 10. 修复 get_customer_stats（移除 deleted_at 引用）
+DROP FUNCTION IF EXISTS get_customer_stats(text,text,text,int,int);
+CREATE OR REPLACE FUNCTION get_customer_stats(
+  p_search text DEFAULT '', p_status text DEFAULT '', p_tag text DEFAULT '',
+  p_limit int DEFAULT 100, p_offset int DEFAULT 0
+)
+RETURNS TABLE (
+  id uuid, phone text, name text, address text, source text,
+  tags jsonb, status text, note text,
+  total_orders int, total_amount numeric,
+  first_order_at timestamptz, last_order_at timestamptz, created_at timestamptz,
+  avg_amount numeric, recent_months int,
+  top_products text[], refund_count int, refund_total numeric
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT c.id, c.phone, c.name, c.address, c.source,
+    c.tags, c.status, c.note,
+    COALESCE(c.total_orders, 0)::int, COALESCE(c.total_amount, 0)::numeric,
+    c.first_order_at, c.last_order_at, c.created_at,
+    CASE WHEN c.total_orders > 0 THEN ROUND(c.total_amount / c.total_orders, 2) ELSE 0 END::numeric,
+    (SELECT COUNT(DISTINCT date_trunc('month', o.created_at))
+     FROM orders o WHERE o.customer_id = c.id
+       AND o.created_at >= now() - interval '6 months')::int,
+    (SELECT array_agg(DISTINCT product_name ORDER BY count DESC LIMIT 3)
+     FROM (SELECT product_name, COUNT(*) count FROM orders o
+           WHERE o.customer_id = c.id GROUP BY product_name ORDER BY count DESC LIMIT 3) sub)::text[],
+    COALESCE((SELECT COUNT(*)::int FROM refunds r
+      JOIN orders o ON o.id = r.order_id WHERE o.customer_id = c.id), 0)::int,
+    COALESCE((SELECT COALESCE(SUM(refund_amount), 0) FROM refunds r
+      JOIN orders o ON o.id = r.order_id WHERE o.customer_id = c.id), 0)::numeric
+  FROM customers c
+  WHERE (p_search = '' OR p_search IS NULL
+     OR c.phone LIKE '%' || p_search || '%'
+     OR c.name ILIKE '%' || p_search || '%')
+    AND (p_status = '' OR p_status IS NULL OR c.status = p_status)
+    AND (p_tag = '' OR p_tag IS NULL OR c.tags @> to_jsonb(p_tag::text))
+  ORDER BY c.last_order_at DESC NULLS LAST, c.created_at DESC
+  LIMIT p_limit OFFSET p_offset;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 11. 修复 update_customer_stats（移除 deleted_at）
+CREATE OR REPLACE FUNCTION update_customer_stats()
+RETURNS void AS $$
+BEGIN
+  UPDATE customers c SET
+    total_orders = sub.cnt, total_amount = sub.total,
+    first_order_at = sub.first_at, last_order_at = sub.last_at,
+    updated_at = now()
+  FROM (
+    SELECT customer_id, COUNT(*) AS cnt,
+      COALESCE(SUM(amount), 0) AS total,
+      MIN(created_at) AS first_at, MAX(created_at) AS last_at
+    FROM orders WHERE customer_id IS NOT NULL GROUP BY customer_id
+  ) sub WHERE c.id = sub.customer_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

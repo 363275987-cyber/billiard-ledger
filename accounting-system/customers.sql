@@ -142,7 +142,7 @@ BEGIN
       MIN(created_at) AS first_at,
       MAX(created_at) AS last_at
     FROM orders
-    WHERE customer_id IS NOT NULL AND deleted_at IS NULL
+    WHERE customer_id IS NOT NULL
     GROUP BY customer_id
   ) sub
   WHERE c.id = sub.customer_id;
@@ -221,11 +221,10 @@ BEGIN
   SELECT json_agg(row_to_json(o)) INTO v_orders
   FROM (
     SELECT o.id, o.order_no, o.product_category, o.product_name, o.amount,
-      o.status, o.order_source, o.payment_method,
-      o.total_amount, o.prepaid_amount, o.balance_due,
+      o.status, o.order_source, o.note,
       o.created_at
     FROM orders o
-    WHERE o.customer_id = p_customer_id AND o.deleted_at IS NULL
+    WHERE o.customer_id = p_customer_id
     ORDER BY o.created_at DESC
   ) o;
   
@@ -236,7 +235,7 @@ BEGIN
       o.order_no, o.product_name
     FROM refunds r
     JOIN orders o ON o.id = r.order_id
-    WHERE o.customer_id = p_customer_id AND r.deleted_at IS NULL
+    WHERE o.customer_id = p_customer_id
     ORDER BY r.created_at DESC
   ) r;
   
@@ -253,7 +252,7 @@ BEGIN
         SUM(amount) AS total_amount,
         COUNT(*) AS count
       FROM orders
-      WHERE customer_id = p_customer_id AND deleted_at IS NULL
+      WHERE customer_id = p_customer_id
         AND created_at >= now() - interval '12 months'
       GROUP BY date_trunc('month', created_at)
     ) m
