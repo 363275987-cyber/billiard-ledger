@@ -407,12 +407,24 @@ async function loadProducts() {
     category: filters.category || undefined,
     brand: filters.brand || undefined,
   })
-  // 加载所有 SKU 和 bundle_items 缓存
-  for (const p of productStore.products) {
-    if (p.product_type === 'bundle' || p.product_type === 'gift_bag') {
-      if (!bundleItemsMap[p.id]) await loadBundleItems(p.id)
-    } else {
-      if (!skusMap[p.id]) await loadSkus(p.id)
+  // 批量加载所有 SKU（一次查询）
+  const { data: allSkus } = await supabase.from('product_skus').select('*').order('sku_code')
+  if (allSkus) {
+    for (const s of allSkus) {
+      if (!skusMap[s.product_id]) skusMap[s.product_id] = []
+      skusMap[s.product_id].push(s)
+    }
+  }
+  // 批量加载所有套装明细（一次查询）
+  const bundleIds = productStore.products.filter(p => p.product_type === 'bundle' || p.product_type === 'gift_bag').map(p => p.id)
+  if (bundleIds.length > 0) {
+    const { data: allItems } = await supabase.from('bundle_items').select('id, quantity, sort_order, sku_id, bundle_id, product_skus:sku_id(id, sku_code, specs, cost_price, retail_price, stock, products:product_id(id, name))').in('bundle_id', bundleIds).order('sort_order')
+    if (allItems) {
+      for (const item of allItems) {
+        const bid = item.bundle_id
+        if (!bundleItemsMap[bid]) bundleItemsMap[bid] = []
+        bundleItemsMap[bid].push(item)
+      }
     }
   }
   // 品牌列表
