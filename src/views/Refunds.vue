@@ -136,12 +136,33 @@
           <!-- Order selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">关联订单 <span class="text-red-400">*</span></label>
-            <select v-model="form.order_id" class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              <option value="" disabled>请选择关联订单</option>
-              <option v-for="o in completedOrders" :key="o.id" :value="o.id">
-                {{ o.customer_name }} - {{ o.product_name }} · ¥{{ o.amount }} · {{ o.order_no }}
-              </option>
-            </select>
+            <div class="relative">
+              <input
+                v-model="orderSearch"
+                @focus="showOrderDropdown = true"
+                @blur="hideOrderDropdown"
+                placeholder="搜索订单号/客户名/产品名..."
+                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <button type="button" v-if="form.order_id" @click="clearOrderSelection" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 cursor-pointer">&times;</button>
+              <!-- 下拉列表 -->
+              <div v-if="showOrderDropdown"
+                class="absolute z-50 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                <div
+                  v-for="o in filteredOrders"
+                  :key="o.id"
+                  @mousedown.prevent="selectOrder(o)"
+                  class="px-3 py-2.5 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
+                >
+                  <div class="flex justify-between items-center">
+                    <span class="font-medium text-gray-800">{{ o.customer_name }}</span>
+                    <span class="text-orange-600 font-medium">¥{{ o.amount }}</span>
+                  </div>
+                  <div class="text-xs text-gray-400">{{ o.product_name }} · {{ o.order_no }}</div>
+                </div>
+                <div v-if="filteredOrders.length === 0" class="text-center py-4 text-gray-400 text-sm">没有匹配的订单</div>
+              </div>
+            </div>
             <div v-if="selectedOrder" class="mt-2 space-y-1">
               <div class="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
                 <span>订单金额 ¥{{ selectedOrder.amount }} · {{ selectedOrder.account_code }}</span>
@@ -188,13 +209,31 @@
           <!-- 付款账户（从哪个账户退款给客户） -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">付款账户 <span class="text-red-400">*</span></label>
-            <select v-model="form.refund_from_account_id"
-              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              <option value="">请选择付款账户</option>
-              <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
-                {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }} · ¥{{ Number(acc.balance || 0).toFixed(0) }}
-              </option>
-            </select>
+            <div class="relative">
+              <input
+                v-model="accountDisplay"
+                @focus="onAccountFocus"
+                @blur="hideAccountDropdown"
+                placeholder="点击选择付款账户..."
+                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              />
+              <div v-if="showAccountDropdown"
+                class="absolute z-50 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                <template v-for="(accs, ip) in filteredAccountGroups" :key="ip">
+                  <div class="px-2 py-1 bg-gray-50 text-xs font-medium text-gray-400 sticky top-0">{{ ip || '未分组' }}</div>
+                  <div
+                    v-for="acc in accs" :key="acc.id"
+                    @mousedown.prevent="selectAccount(acc)"
+                    :class="acc.id === form.refund_from_account_id ? 'bg-blue-50' : ''"
+                    class="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
+                  >
+                    {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }}
+                    <span v-if="acc.balance != null" class="ml-2 text-xs text-gray-400">¥{{ Number(acc.balance).toFixed(0) }}</span>
+                  </div>
+                </template>
+                <div v-if="Object.keys(filteredAccountGroups).length === 0" class="text-center py-4 text-gray-400 text-sm">没有可用账户</div>
+              </div>
+            </div>
           </div>
           <!-- Note -->
           <div>
@@ -299,6 +338,46 @@ const showOrderDropdown = ref(false)
 const showAccountDropdown = ref(false)
 const orderProducts = ref([]) // 选中订单的产品明细
 
+// 付款账户显示文本（选中后显示名称，聚焦时清空以便搜索）
+const accountDisplay = computed(() => {
+  if (accountSearch.value) return accountSearch.value
+  const acc = accounts.value.find(a => a.id === form.refund_from_account_id)
+  return acc ? `${acc.code}${acc.short_name ? ` (${acc.short_name})` : ''}` : ''
+})
+
+// blur 延迟关闭（避免点击下拉项时立刻关闭）
+function hideOrderDropdown() { setTimeout(() => showOrderDropdown.value = false, 200) }
+function hideAccountDropdown() { setTimeout(() => showAccountDropdown.value = false, 200) }
+
+// 聚焦付款账户时清空搜索文本，显示所有账户
+function onAccountFocus() { accountSearch.value = ''; showAccountDropdown.value = true }
+
+// 选中订单
+function selectOrder(o) {
+  form.order_id = o.id
+  form.refund_amount = o.amount
+  orderSearch.value = `${o.customer_name} - ${o.product_name} (¥${o.amount})`
+  showOrderDropdown.value = false
+  if (o.account_id && !form.refund_from_account_id) {
+    form.refund_from_account_id = o.account_id
+  }
+  loadOrderProducts(o.id)
+}
+
+function clearOrderSelection() {
+  form.order_id = ''
+  form.refund_amount = null
+  orderSearch.value = ''
+  orderProducts.value = []
+}
+
+// 选中付款账户
+function selectAccount(acc) {
+  form.refund_from_account_id = acc.id
+  accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
+  showAccountDropdown.value = false
+}
+
 const stats = reactive({ count: 0, total: 0, rate: 0 })
 
 const accountsByIP = computed(() => {
@@ -346,23 +425,6 @@ const filteredAccountGroups = computed(() => {
   return filtered
 })
 
-// 监听关联订单变化：自动填退款金额 + 付款账户 + 加载产品明细
-watch(() => form.order_id, (orderId) => {
-  if (!orderId) {
-    form.refund_amount = null
-    orderProducts.value = []
-    return
-  }
-  const o = completedOrders.value.find(x => x.id === orderId)
-  if (o) {
-    form.refund_amount = o.amount // 默认全额退款
-    if (o.account_id && !form.refund_from_account_id) {
-      form.refund_from_account_id = o.account_id
-    }
-    loadOrderProducts(o.id)
-  }
-})
-
 async function loadOrderProducts(orderId) {
   try {
     const { data } = await supabase
@@ -373,24 +435,6 @@ async function loadOrderProducts(orderId) {
   } catch (e) {
     orderProducts.value = []
   }
-}
-
-// 选中退款账户
-function selectAccount(acc) {
-  form.refund_from_account_id = acc.id
-  accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
-  showAccountDropdown.value = false
-}
-
-function clearAccountSelection() {
-  form.refund_from_account_id = ''
-  accountSearch.value = ''
-}
-
-// 聚焦付款账户输入框时，清空搜索文本显示所有账户
-function onAccountFocus() {
-  accountSearch.value = ''
-  showAccountDropdown.value = true
 }
 
 const filteredRefunds = computed(() => {
