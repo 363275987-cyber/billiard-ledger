@@ -2,7 +2,7 @@
   <div>
     <!-- Header -->
     <div class="flex items-center justify-between mb-4 md:mb-6">
-      <h1 class="text-lg md:text-xl font-bold text-gray-800">📝 订单登记</h1>
+      <h1 class="text-lg md:text-xl font-bold text-gray-800">📋 订单管理</h1>
       <div class="flex items-center gap-2 flex-wrap">
         <!-- 随机测试数据 -->
         <div v-if="isAdmin" class="inline-flex items-center gap-1">
@@ -208,6 +208,21 @@
       </div>
     </div>
 
+    <!-- Tab 筛选：全部 / 私域 / 电商 -->
+    <div class="flex items-center gap-2 mb-4">
+      <button
+        v-for="tab in orderTabs"
+        :key="tab.key"
+        @click="activeTab = tab.key; loadOrders()"
+        class="px-4 py-2 rounded-xl text-sm font-medium border transition-all cursor-pointer"
+        :class="activeTab === tab.key
+          ? 'bg-green-50 text-green-700 border-green-300 shadow-sm'
+          : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700'"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
     <!-- 今日订单汇总 -->
     <div v-if="todayOrdersData.loaded" class="bg-white rounded-xl p-3 mb-4 border border-gray-100 flex items-center gap-3">
       <div class="w-1 h-8 rounded-full bg-green-500"></div>
@@ -325,6 +340,7 @@
             <th class="px-4 py-3 text-left font-medium">时间</th>
             <th class="px-4 py-3 text-left font-medium">客服号</th>
             <th class="px-4 py-3 text-left font-medium">收款账户</th>
+            <th class="px-4 py-3 text-left font-medium">店铺账户</th>
             <th class="px-4 py-3 text-left font-medium">客户</th>
             <th class="px-4 py-3 text-left font-medium">产品类型</th>
             <th class="px-4 py-3 text-left font-medium">产品名</th>
@@ -338,7 +354,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="order in orderStore.orders"
+            v-for="order in filteredOrders"
             :key="order.id"
             class="border-t border-gray-50 hover:bg-gray-50/60"
           >
@@ -355,8 +371,16 @@
               <span v-else-if="order.payment_method" class="px-2 py-0.5 rounded text-xs font-medium" :class="paymentMethodClass(order.payment_method)">{{ paymentMethodLabel(order.payment_method) }}</span>
               <span v-else class="text-gray-300 text-xs">—</span>
             </td>
+            <td class="px-4 py-3">
+              <span v-if="order.platform_type" class="text-xs text-gray-600">{{ order.platform_store || '—' }}</span>
+              <span v-else-if="order.account_id" class="text-xs text-gray-600">{{ getAccountShortName(order.account_id) }}</span>
+              <span v-else class="text-gray-300 text-xs">—</span>
+            </td>
             <td class="px-4 py-3 text-gray-800">
-              <div>{{ order.customer_name }}</div>
+              <div class="flex items-center gap-1.5">
+                <span>{{ order.customer_name }}</span>
+                <span v-if="order.platform_type" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium" :class="platformTypeTagClass(order.platform_type)">{{ platformTypeTagLabel(order.platform_type) }}</span>
+              </div>
               <div v-if="order.customer_phone" class="text-xs text-gray-400">{{ order.customer_phone }}</div>
             </td>
             <td class="px-4 py-3 text-gray-500">{{ PRODUCT_CATEGORIES[order.product_category] || order.product_category }}</td>
@@ -409,8 +433,8 @@
               </div>
             </td>
           </tr>
-          <tr v-if="!orderStore.loading && orderStore.orders.length === 0">
-            <td :colspan="canEdit ? 12 : 11" class="px-4 py-16 text-center text-gray-400">
+          <tr v-if="!orderStore.loading && filteredOrders.length === 0">
+            <td :colspan="canEdit ? 13 : 12" class="px-4 py-16 text-center text-gray-400">
               <div class="text-3xl mb-2">📭</div>
               <div>暂无订单数据</div>
             </td>
@@ -428,14 +452,14 @@
         </div>
       </div>
       <div
-        v-for="order in orderStore.orders"
+        v-for="order in filteredOrders"
         :key="'m-' + order.id"
         class="bg-white rounded-xl border border-gray-100 p-3 shadow-sm"
       >
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2 min-w-0 flex-1">
             <span v-if="order.service_number_code" class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium flex-shrink-0">{{ order.service_number_code }}</span>
-            <span v-if="order.platform_type" class="px-1.5 py-0.5 rounded text-[10px] flex-shrink-0" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
+            <span v-if="order.platform_type" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium flex-shrink-0" :class="platformTypeTagClass(order.platform_type)">{{ platformTypeTagLabel(order.platform_type) }}</span>
             <span class="text-sm font-semibold text-green-600">{{ formatMoney(order.amount) }}</span>
             <span v-if="order.platform_type && order.payment_amount > 0" class="text-[10px] text-gray-400">实收 {{ formatMoney(order.actual_income || order.payment_amount) }}</span>
           </div>
@@ -449,6 +473,8 @@
         <div class="text-xs text-gray-400 truncate mb-2">
           {{ PRODUCT_CATEGORIES[order.product_category] || order.product_category || '' }}
           <span v-if="order.product_name"> · {{ order.product_name }}</span>
+          <span v-if="order.platform_store"> · {{ order.platform_store }}</span>
+          <span v-else-if="order.account_id"> · {{ getAccountShortName(order.account_id) }}</span>
           <span v-if="order.external_order_no"> · <span class="font-mono">{{ order.external_order_no }}</span></span>
           <span v-if="order.sku_code"> · SKU:{{ order.sku_code }}</span>
         </div>
@@ -461,7 +487,7 @@
           </div>
         </div>
       </div>
-      <div v-if="!orderStore.loading && orderStore.orders.length === 0" class="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-400">
+      <div v-if="!orderStore.loading && filteredOrders.length === 0" class="bg-white rounded-xl border border-gray-100 p-8 text-center text-gray-400">
         <div class="text-3xl mb-2">📭</div>
         <div>暂无订单数据</div>
       </div>
@@ -1288,6 +1314,21 @@ const isAdmin = computed(() => authStore.isAdmin)
 const canEdit = computed(() => isAdmin.value || isFinance.value || authStore.isSales)
 const canCreate = computed(() => isAdmin.value || isFinance.value || authStore.isSales || authStore.isCS)
 
+// ---------- Tab 筛选 ----------
+const activeTab = ref('all')
+const orderTabs = [
+  { key: 'all', label: '全部订单' },
+  { key: 'private', label: '私域订单' },
+  { key: 'ecommerce', label: '电商订单' },
+]
+
+const filteredOrders = computed(() => {
+  const list = orderStore.orders
+  if (activeTab.value === 'private') return list.filter(o => !o.platform_type)
+  if (activeTab.value === 'ecommerce') return list.filter(o => !!o.platform_type)
+  return list
+})
+
 // ---------- text mode ----------
 const showTextMode = ref(false)
 const rawText = ref('')
@@ -1632,11 +1673,11 @@ async function handleExportOrders() {
 // ---------- delete ----------
 const selectedOrders = ref([])
 const canDeleteOrders = computed(() => isAdmin.value || isFinance.value || authStore.isSales)
-const isAllSelected = computed(() => orderStore.orders.length > 0 && selectedOrders.value.length === orderStore.orders.length)
+const isAllSelected = computed(() => filteredOrders.value.length > 0 && selectedOrders.value.length === filteredOrders.value.length)
 
 function toggleSelectAll(e) {
   if (e.target.checked) {
-    selectedOrders.value = orderStore.orders.map(o => o.id)
+    selectedOrders.value = filteredOrders.value.map(o => o.id)
   } else {
     selectedOrders.value = []
   }
@@ -1802,6 +1843,24 @@ function paymentMethodClass(m) { return paymentMethodColors[m] || paymentMethodC
 function getAccountName(accountId) {
   const acc = accountStore.accounts.find(a => a.id === accountId)
   return acc ? (acc.short_name || acc.code) : '未知账户'
+}
+function getAccountShortName(accountId) {
+  const acc = accountStore.accounts.find(a => a.id === accountId)
+  return acc ? (acc.short_name || acc.code) : '—'
+}
+
+// 平台标签（电商订单专用，Keep运动风格小标签）
+function platformTypeTagLabel(p) {
+  const labels = { douyin: '抖音', kuaishou: '快手', shipinhao: '视频号' }
+  return labels[p] || p || ''
+}
+function platformTypeTagClass(p) {
+  const classes = {
+    douyin: 'bg-pink-100 text-pink-700',
+    kuaishou: 'bg-orange-100 text-orange-700',
+    shipinhao: 'bg-green-100 text-green-700',
+  }
+  return classes[p] || 'bg-gray-100 text-gray-500'
 }
 
 const availableServiceNumbers = computed(() => {
