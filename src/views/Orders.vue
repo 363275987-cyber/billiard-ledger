@@ -561,8 +561,6 @@
               </div>
             </div>
           </div>
-            </div>
-          </div>
 
           <!-- 客户信息 -->
           <div class="grid grid-cols-2 gap-3">
