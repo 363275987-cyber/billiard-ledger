@@ -231,100 +231,43 @@ const menuGroups = computed(() => {
     return []
   }
 
-  // ✏️ 登记管理 — 日常登记操作
+  // ✏️ 业务登记
   groups.push({
     icon: '✏️',
-    label: '登记管理',
+    label: '业务登记',
     items: [
-      { label: '订单登记', path: '/orders' },
-      { label: '收支登记', path: '/expenses', badge: pendingCount.value || undefined },
-      { label: '退款登记', path: '/refunds' },
+      { label: '订单管理', path: '/orders' },
+      { label: '支出管理', path: '/expenses' },
+    ],
+  })
+
+  // 📦 产品与电商
+  groups.push({
+    icon: '📦',
+    label: '产品与电商',
+    items: [
+      { label: '产品库', path: '/products' },
+      { label: '电商销量', path: '/ecommerce-sales' },
+    ],
+  })
+
+  // 💰 资金管理
+  groups.push({
+    icon: '💰',
+    label: '资金管理',
+    items: [
+      { label: '账户管理', path: '/accounts' },
       { label: '转账提现', path: '/transfers' },
     ],
   })
 
-  // 📦 商品与订单 — 卖货相关
-  groups.push({
-    icon: '📦',
-    label: '商品与订单',
-    items: [
-      { label: '产品库', path: '/products' },
-      { label: '客户管理', path: '/customers' },
-      { label: '外部订单', path: '/platform-orders' },
-    ],
-  })
-
-  // 🗄️ 库存管理 — 仓库和库存
-  groups.push({
-    icon: '🗄️',
-    label: '库存管理',
-    items: [
-      { label: '仓库管理', path: '/warehouses' },
-      { label: '库存总览', path: '/inventory' },
-      { label: '库存流水', path: '/inventory-logs' },
-        { label: '产品订货', path: '/purchase-orders' },
-    ],
-  })
-
-  // 🏪 电商店铺 — 电商数据看板
-  groups.push({
-    icon: '🏪',
-    label: '电商店铺',
-    items: [
-      { label: '电商看板', path: '/ecommerce' },
-    ],
-  })
-
-  // 💰 财务管理 — 钱进出
-  groups.push({
-    icon: '💰',
-    label: '财务管理',
-    items: [
-      { label: '客服号管理', path: '/service-numbers' },
-      { label: '账户管理', path: '/accounts' },
-      { label: '余额快照', path: '/balance' },
-      { label: '股东垫资', path: '/shareholder-loans' },
-      { label: '操作日志', path: '/logs' },
-    ],
-  })
-
-  // 📊 数据报表 — 看数据
-  groups.push({
-    icon: '📊',
-    label: '数据报表',
-    items: [
-      { label: '电商销量', path: '/ecommerce-sales' },
-      { label: '财务报表', path: '/reports' },
-      { label: '业绩统计', path: '/performance' },
-      { label: '提成管理', path: '/commission' },
-      { label: '产品销量', path: '/product-sales' },
-      { label: '平台收入', path: '/platforms' },
-    ],
-  })
-  if (auth.isFinance) {
-    groups[groups.length - 1].items.push({ label: '法定报表', path: '/legal-reports' })
-  }
-
-  // 🔌 平台对接 — 外部系统
-  groups.push({
-    icon: '🔌',
-    label: '平台对接',
-    items: [
-      { label: '凭证配置', path: '/platform-integration' },
-      { label: '外部订单', path: '/platform-orders' },
-    ],
-  })
-
-  // ⚙️ 系统管理 — 人和配置
+  // ⚙️ 系统
   if (auth.isFinance) {
     groups.push({
       icon: '⚙️',
-      label: '系统管理',
+      label: '系统',
       items: [
         { label: '用户管理', path: '/users' },
-        { label: '销售分组', path: '/sales-groups' },
-        { label: '教练系统', path: '/coaching' },
-        { label: '资产管理', path: '/assets' },
         { label: '系统设置', path: '/settings' },
       ],
     })
