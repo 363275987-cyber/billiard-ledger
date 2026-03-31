@@ -190,12 +190,10 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">付款账户 <span class="text-red-400">*</span></label>
             <select v-model="form.refund_from_account_id"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
-              <option value="" disabled>请选择付款账户</option>
-              <optgroup v-for="(accs, ip) in accountsByIP" :key="ip" :label="ip || '未分组'">
-                <option v-for="acc in accs" :key="acc.id" :value="acc.id">
-                  {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }} · ¥{{ Number(acc.balance || 0).toFixed(0) }}
-                </option>
-              </optgroup>
+              <option value="">请选择付款账户</option>
+              <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
+                {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }} · ¥{{ Number(acc.balance || 0).toFixed(0) }}
+              </option>
             </select>
           </div>
           <!-- Note -->
