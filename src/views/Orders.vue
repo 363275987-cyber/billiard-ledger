@@ -1054,7 +1054,6 @@ async function quickCreateAccount() {
     const payload = {
       short_name: name, code: name, platform: quickAccountForm.platform,
       payment_alias: quickAccountForm.payment_alias?.trim() || null,
-      balance: 0, opening_balance: 0, balance_method: 'manual', status: 'active',
     }
     await accountStore.createAccount(payload)
     accountStore._forceRefresh = true
@@ -1126,7 +1125,6 @@ async function handleParse() {
           platform: item.platform,
           balance: 0,
           opening_balance: 0,
-          balance_method: 'manual',
           status: 'active',
         })
         // 刷新账户列表，更新 accNames

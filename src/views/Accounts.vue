@@ -296,22 +296,8 @@
 
             <!-- Balance method toggle (admin only, editing only) -->
             <div v-if="isEditing && authStore.isAdmin" class="border-t border-gray-100 pt-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-medium text-gray-700">余额计算方式</div>
-                  <div class="text-xs text-gray-400 mt-0.5">{{ form.balance_method === 'auto' ? '系统根据收支自动计算' : '手动修改余额，操作会记录日志' }}</div>
-                </div>
-                <button
-                  @click="form.balance_method = form.balance_method === 'auto' ? 'manual' : 'auto'"
-                  :class="form.balance_method === 'auto' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'"
-                  class="px-3 py-1.5 border rounded-lg text-sm cursor-pointer transition"
-                >
-                  {{ form.balance_method === 'auto' ? '🤖 自动' : '✋ 手动' }}
-                </button>
-              </div>
-              <!-- Balance edit when manual -->
-              <div v-if="form.balance_method === 'manual'" class="mt-3 flex items-center gap-2">
-                <label class="text-xs text-gray-500 shrink-0">修改余额</label>
+              <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-gray-700">修改余额</label>
                 <input
                   v-model.number="form.balance"
                   type="number"
@@ -473,7 +459,6 @@ const defaultForm = () => ({
   cert_phone: '',
   id_number: '',
   balance: 0,
-  balance_method: 'auto',
   payment_alias: '',
   note: '',
 })
@@ -714,7 +699,6 @@ function openModal(acc = null) {
       cert_phone: acc.cert_phone || '',
       id_number: acc.id_number || '',
       balance: acc.balance || 0,
-      balance_method: acc.balance_method || 'auto',
       payment_alias: acc.payment_alias ? acc.payment_alias.replace(/付$/, '') : '',
       note: acc.note || '',
     })
@@ -751,13 +735,12 @@ async function saveAccount() {
         real_name: form.real_name?.trim() || null,
         cert_phone: form.cert_phone?.trim() || null,
         id_number: form.id_number?.trim() || null,
-        balance_method: form.balance_method,
         payment_alias: (form.payment_alias?.trim() || null),
         note: form.note?.trim() || null,
       }
       // 手动模式下余额有变化，记录日志
       const oldAcc = allAccounts.value.find(a => a.id === editingId.value)
-      if (oldAcc && form.balance_method === 'manual' && Number(oldAcc.balance) !== Number(form.balance)) {
+      if (oldAcc && authStore.isAdmin && Number(oldAcc.balance) !== Number(form.balance)) {
         const isAdmin = authStore.isAdmin
         if (isAdmin) {
           // admin直接改余额
@@ -817,7 +800,6 @@ async function saveAccount() {
         id_number: form.id_number?.trim() || null,
         balance: Number(form.balance) || 0,
         opening_balance: Number(form.balance) || 0,
-        balance_method: 'manual',
         status: 'active',
         payment_alias: (form.payment_alias?.trim() || null),
         note: form.note?.trim() || null,
@@ -925,18 +907,6 @@ async function saveBalanceEdit(acc) {
   } catch (e) {
     console.error(e)
     toast('余额更新失败: ' + (e.message || ''), 'error')
-  }
-}
-
-async function toggleBalanceMethod(acc) {
-  const newMethod = acc.balance_method === 'auto' ? 'manual' : 'auto'
-  const label = newMethod === 'auto' ? '自动' : '手动'
-  try {
-    await accountStore.updateAccount(acc.id, { balance_method: newMethod })
-    toast(`已切换为${label}计算`, 'success')
-  } catch (e) {
-    console.error(e)
-    toast('切换失败: ' + (e.message || ''), 'error')
   }
 }
 
