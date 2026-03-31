@@ -384,8 +384,9 @@
             <div class="text-xs text-gray-400 mt-1">支持 .xlsx / .xls</div>
             <input ref="importFile" type="file" accept=".xlsx,.xls" class="hidden" @change="onImportFileSelected" />
           </div>
-          <div class="flex items-center gap-2">
-            <button @click="downloadTemplate" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer underline">📥 下载导入模板</button>
+          <div class="flex items-center gap-3">
+            <button @click="downloadSingleTemplate" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">📥 下载单品模板</button>
+            <button @click="downloadBundleTemplate" class="text-xs text-orange-600 hover:text-orange-800 cursor-pointer">📦 下载套装模板</button>
           </div>
           <div v-if="importFile" class="text-sm bg-blue-50 rounded-lg p-3 flex items-center justify-between">
             <span>📄 {{ importFile.name }}</span>
@@ -399,11 +400,13 @@
         <!-- 步骤2：预览确认 -->
         <div v-if="importStep===2" class="space-y-3">
           <div class="text-sm text-gray-600">
-            共解析 <b>{{ importPreview.length }}</b> 条记录
+            {{ importType === 'bundle' ? '📦 套装' : '🎱 单品' }}
+            · <b>{{ importBundles.length || importPreview.length }}</b> 条记录
             <span class="text-green-600 ml-2">新增 {{ importNewCount }}</span>
             <span class="text-blue-600 ml-2">更新 {{ importUpdateCount }}</span>
           </div>
-          <div class="max-h-60 overflow-y-auto border border-gray-100 rounded-lg">
+          <!-- 单品预览 -->
+          <div v-if="importType !== 'bundle'" class="max-h-60 overflow-y-auto border border-gray-100 rounded-lg">
             <table class="w-full text-xs">
               <thead class="bg-gray-50 sticky top-0">
                 <tr>
@@ -433,10 +436,35 @@
             </table>
             <div v-if="importPreview.length > 100" class="text-xs text-gray-400 text-center py-2">...还有 {{ importPreview.length - 100 }} 条</div>
           </div>
+          <!-- 套装预览 -->
+          <div v-else class="max-h-60 overflow-y-auto border border-gray-100 rounded-lg">
+            <div v-for="(b, bi) in importBundles.slice(0, 20)" :key="bi" class="border-b border-gray-50 last:border-0">
+              <div class="flex items-center gap-2 px-2 py-1.5 bg-orange-50 text-xs">
+                <span v-if="b._isNew" class="text-green-600 font-bold">[新增]</span>
+                <span v-else class="text-blue-600 font-bold">[更新]</span>
+                <span class="font-mono font-bold">{{ b.code }}</span>
+                <span>{{ b.name }}</span>
+                <span class="text-gray-400 ml-auto">{{ b.items.length }} 件</span>
+              </div>
+              <table class="w-full text-xs">
+                <tbody>
+                  <tr v-for="(item, ii) in b.items" :key="ii" class="border-t border-gray-50/50">
+                    <td class="px-3 py-1 text-gray-400 w-8">{{ ii+1 }}</td>
+                    <td class="px-2 py-1 font-mono">{{ item.childSkuCode }}</td>
+                    <td class="px-2 py-1">{{ item.childName }}</td>
+                    <td class="px-2 py-1">×{{ item.quantity }}</td>
+                    <td class="px-2 py-1 text-right">{{ item.cost_price ?? '' }}</td>
+                    <td class="px-2 py-1 text-right">{{ item.retail_price ?? '' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="importBundles.length > 20" class="text-xs text-gray-400 text-center py-2">...还有 {{ importBundles.length - 20 }} 个套装</div>
+          </div>
           <div class="flex gap-2">
             <button @click="importStep=1" class="flex-1 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">上一步</button>
             <button @click="doImport" :disabled="importSaving" class="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer disabled:opacity-50">
-              {{ importSaving ? '导入中...' : `确认导入 ${importPreview.length} 条` }}
+              {{ importSaving ? '导入中...' : `确认导入` }}
             </button>
           </div>
         </div>
@@ -781,7 +809,6 @@ const exportColumns = ref([
 // ========== 导出逻辑 ==========
 async function doExport() {
   try {
-    // 获取当前 tab 的所有产品 + SKU
     const pType = activeTab.value === 'bundle' ? 'bundle' : 'single'
     const { data: products } = await supabase.from('products').select('id, name, product_type, category, brand, cost_price, retail_price').eq('status', 'active').eq('product_type', pType).order('name')
     if (!products?.length) { toast('没有可导出的产品', 'warning'); return }
@@ -795,31 +822,21 @@ async function doExport() {
     const rows = []
     for (const p of products) {
       const pSkus = skuByPid[p.id] || []
-      if (pSkus.length === 0) {
+      const buildRow = (sku) => {
         const row = {}
         selectedCols.forEach(c => {
-          if (c.key === 'sku_code') row['SKU编码'] = ''
-          else if (c.key === 'stock') row['库存'] = ''
+          if (c.key === 'sku_code') row['SKU编码'] = sku?.sku_code || ''
+          else if (c.key === 'cost_price') row['成本价'] = sku?.cost_price ?? p.cost_price ?? ''
+          else if (c.key === 'retail_price') row['零售价'] = sku?.retail_price ?? p.retail_price ?? ''
+          else if (c.key === 'stock') row['库存'] = sku?.stock ?? 0
           else if (c.key === 'product_type') row['产品类型'] = p[c.key] === 'bundle' ? '套装' : '单品'
           else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
           else row[c.label] = p[c.key] ?? ''
         })
-        rows.push(row)
-      } else {
-        for (const sku of pSkus) {
-          const row = {}
-          selectedCols.forEach(c => {
-            if (c.key === 'sku_code') row['SKU编码'] = sku.sku_code || ''
-            else if (c.key === 'cost_price') row['成本价'] = sku.cost_price ?? p.cost_price ?? ''
-            else if (c.key === 'retail_price') row['零售价'] = sku.retail_price ?? p.retail_price ?? ''
-            else if (c.key === 'stock') row['库存'] = sku.stock ?? 0
-            else if (c.key === 'product_type') row['产品类型'] = p[c.key] === 'bundle' ? '套装' : '单品'
-            else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
-            else row[c.label] = p[c.key] ?? ''
-          })
-          rows.push(row)
-        }
+        return row
       }
+      if (pSkus.length === 0) rows.push(buildRow(null))
+      else pSkus.forEach(s => rows.push(buildRow(s)))
     }
 
     const ws = XLSX.utils.json_to_sheet(rows)
@@ -835,26 +852,50 @@ async function doExport() {
 
 // ========== 导入逻辑 ==========
 const importStep = ref(1) // 1=上传 2=预览 3=完成
+const importType = ref('single') // single | bundle
 const importFile = ref(null)
 const importParsing = ref(false)
 const importSaving = ref(false)
-const importPreview = ref([])
+const importPreview = ref([]) // 单品行
+const importBundles = ref([]) // 套装组
 const importResult = ref({ created: 0, updated: 0 })
 
-const importNewCount = computed(() => importPreview.value.filter(r => r._isNew).length)
-const importUpdateCount = computed(() => importPreview.value.filter(r => !r._isNew).length)
+const importNewCount = computed(() => {
+  if (importType.value === 'bundle') return importBundles.value.filter(b => b._isNew).length
+  return importPreview.value.filter(r => r._isNew).length
+})
+const importUpdateCount = computed(() => {
+  if (importType.value === 'bundle') return importBundles.value.filter(b => !b._isNew).length
+  return importPreview.value.filter(r => !r._isNew).length
+})
 
-function downloadTemplate() {
-  const template = [
+function downloadSingleTemplate() {
+  const rows = [
     { 'SKU编码': 'DAA001', '产品名称': '示例球杆', '分类': '球杆', '品牌': 'DBA', '成本价': 334, '零售价': 1555, '库存': 50 },
     { 'SKU编码': 'DAB001', '产品名称': '示例杆桶', '分类': '包装', '品牌': 'DBA', '成本价': 90, '零售价': 425, '库存': 30 },
   ]
-  const ws = XLSX.utils.json_to_sheet(template)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, '导入模板')
-  // Set column widths
+  const ws = XLSX.utils.json_to_sheet(rows)
   ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 6 }]
-  XLSX.writeFile(wb, '产品导入模板.xlsx')
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '单品')
+  XLSX.writeFile(wb, '单品导入模板.xlsx')
+}
+
+function downloadBundleTemplate() {
+  // 套装模板：套装SKU编码, 套装名称, 成本价, 零售价, 库存, 子商品SKU编码, 子商品名称, 数量, 子商品成本价, 子商品零售价
+  // 每个套装有一个头部行（子商品编码为空）+ 多个子商品行
+  const rows = [
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': 2499, '库存': 10, '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品成本价': '', '子商品零售价': '' },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品成本价': 334, '子商品零售价': 1555 },
+    { '套装SKU编码': 'TA001', '套装名称': '破晓风暴套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAB001', '子商品名称': 'DBA风暴杆桶', '数量': 1, '子商品成本价': 90, '子商品零售价': 425 },
+    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '成本价': '', '零售价': 2899, '库存': 5, '子商品SKU编码': '', '子商品名称': '', '数量': '', '子商品成本价': '', '子商品零售价': '' },
+    { '套装SKU编码': 'TA002', '套装名称': '破晓雷霆套装', '成本价': '', '零售价': '', '库存': '', '子商品SKU编码': 'DAA001', '子商品名称': 'DBA破晓', '数量': 1, '子商品成本价': 334, '子商品零售价': 1555 },
+  ]
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 10 }, { wch: 10 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '套装')
+  XLSX.writeFile(wb, '套装导入模板.xlsx')
 }
 
 function onImportFileSelected(e) {
@@ -870,31 +911,17 @@ async function parseImportFile() {
     const wb = XLSX.read(buf)
     const ws = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(ws)
-
     if (!rows.length) { toast('文件中没有数据', 'warning'); return }
 
-    // Get existing SKU codes for matching
-    const { data: existingSkus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock, products:product_id(id, name, product_type, category, brand)')
-    const skuMap = {}
-    ;(existingSkus || []).forEach(s => { skuMap[s.sku_code] = s })
-
-    const preview = rows.map(row => {
-      const code = String(row['SKU编码'] || '').trim()
-      const existing = skuMap[code]
-      return {
-        'SKU编码': code,
-        '产品名称': row['产品名称'] || '',
-        '分类': row['分类'] || '',
-        '品牌': row['品牌'] || '',
-        '成本价': row['成本价'] != null ? Number(row['成本价']) : null,
-        '零售价': row['零售价'] != null ? Number(row['零售价']) : null,
-        '库存': row['库存'] != null ? Number(row['库存']) : null,
-        '_isNew': !existing,
-        '_existingSku': existing,
-      }
-    }).filter(r => r['SKU编码'])
-
-    importPreview.value = preview
+    // Detect type: if first row has '套装SKU编码' column → bundle
+    const firstKey = Object.keys(rows[0])[0]
+    if (firstKey === '套装SKU编码') {
+      importType.value = 'bundle'
+      await parseBundleRows(rows)
+    } else {
+      importType.value = 'single'
+      await parseSingleRows(rows)
+    }
     importStep.value = 2
   } catch (e) {
     toast('解析失败: ' + e.message, 'error')
@@ -903,55 +930,160 @@ async function parseImportFile() {
   }
 }
 
+async function parseSingleRows(rows) {
+  const { data: existingSkus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock, products:product_id(id, name, product_type, category, brand)')
+  const skuMap = {}
+  ;(existingSkus || []).forEach(s => { skuMap[s.sku_code] = s })
+
+  importPreview.value = rows.map(row => {
+    const code = String(row['SKU编码'] || '').trim()
+    return {
+      'SKU编码': code,
+      '产品名称': row['产品名称'] || '',
+      '分类': row['分类'] || '',
+      '品牌': row['品牌'] || '',
+      '成本价': row['成本价'] != null ? Number(row['成本价']) : null,
+      '零售价': row['零售价'] != null ? Number(row['零售价']) : null,
+      '库存': row['库存'] != null ? Number(row['库存']) : null,
+      _isNew: !skuMap[code],
+      _existingSku: skuMap[code],
+    }
+  }).filter(r => r['SKU编码'])
+  importBundles.value = []
+}
+
+async function parseBundleRows(rows) {
+  const { data: existingSkus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock')
+  const { data: existingProducts } = await supabase.from('products').select('id, name, product_type').eq('status', 'active')
+  const skuMap = {}
+  ;(existingSkus || []).forEach(s => { skuMap[s.sku_code] = s })
+  const productMap = {}
+  ;(existingProducts || []).forEach(p => { productMap[p.name] = p })
+
+  // Group rows by 套装SKU编码
+  const bundleGroups = {}
+  for (const row of rows) {
+    const code = String(row['套装SKU编码'] || '').trim()
+    if (!code) continue
+    if (!bundleGroups[code]) bundleGroups[code] = { code, name: row['套装名称'] || '', cost_price: null, retail_price: null, stock: null, items: [] }
+    const g = bundleGroups[code]
+    if (row['成本价'] != null && g.cost_price === null) g.cost_price = Number(row['成本价'])
+    if (row['零售价'] != null && g.retail_price === null) g.retail_price = Number(row['零售价'])
+    if (row['库存'] != null && g.stock === null) g.stock = Number(row['库存'])
+    const childCode = String(row['子商品SKU编码'] || '').trim()
+    if (childCode) {
+      g.items.push({
+        childSkuCode: childCode,
+        childName: row['子商品名称'] || '',
+        quantity: Number(row['数量']) || 1,
+        cost_price: row['子商品成本价'] != null ? Number(row['子商品成本价']) : null,
+        retail_price: row['子商品零售价'] != null ? Number(row['子商品零售价']) : null,
+      })
+    }
+  }
+
+  const bundles = []
+  for (const code of Object.keys(bundleGroups)) {
+    const g = bundleGroups[code]
+    bundles.push({
+      ...g,
+      _isNew: !skuMap[code],
+      _existingSku: skuMap[code],
+    })
+  }
+
+  importBundles.value = bundles
+  importPreview.value = []
+}
+
 async function doImport() {
   importSaving.value = true
   let created = 0, updated = 0
   try {
-    for (const row of importPreview.value) {
-      if (row._isNew) {
-        // Create new product + SKU
-        const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0] || null
-        const { data: product, error: pe } = await supabase.from('products').insert({
-          name: row['产品名称'],
-          category: catKey || row['分类'],
-          brand: row['品牌'],
-          cost_price: row['成本价'],
-          retail_price: row['零售价'],
-          product_type: 'single',
-          status: 'active',
-        }).select().single()
-        if (pe) { console.error('创建产品失败:', row['SKU编码'], pe.message); continue }
-        // Create SKU
-        const { error: se } = await supabase.from('product_skus').insert({
-          product_id: product.id,
-          sku_code: row['SKU编码'],
-          cost_price: row['成本价'],
-          retail_price: row['零售价'],
-          stock: row['库存'] ?? 0,
-        })
-        if (se) console.error('创建SKU失败:', row['SKU编码'], se.message)
-        else created++
-      } else {
-        // Update existing SKU
-        const updates = {}
-        if (row['成本价'] != null) updates.cost_price = row['成本价']
-        if (row['零售价'] != null) updates.retail_price = row['零售价']
-        if (row['库存'] != null) updates.stock = row['库存']
-        // Also update product name/brand/category
-        const prodUpdates = {}
-        if (row['产品名称']) prodUpdates.name = row['产品名称']
-        if (row['品牌']) prodUpdates.brand = row['品牌']
-        const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0]
-        if (catKey) prodUpdates.category = catKey
-        if (Object.keys(updates).length) {
-          await supabase.from('product_skus').update(updates).eq('id', row._existingSku.id)
+    if (importType.value === 'single') {
+      for (const row of importPreview.value) {
+        if (row._isNew) {
+          const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0] || null
+          const { data: product, error: pe } = await supabase.from('products').insert({
+            name: row['产品名称'], category: catKey || row['分类'], brand: row['品牌'],
+            cost_price: row['成本价'], retail_price: row['零售价'],
+            product_type: 'single', status: 'active',
+          }).select().single()
+          if (pe) { console.error('创建失败:', row['SKU编码'], pe.message); continue }
+          const { error: se } = await supabase.from('product_skus').insert({
+            product_id: product.id, sku_code: row['SKU编码'],
+            cost_price: row['成本价'], retail_price: row['零售价'], stock: row['库存'] ?? 0,
+          })
+          if (!se) created++
+        } else {
+          const updates = {}
+          if (row['成本价'] != null) updates.cost_price = row['成本价']
+          if (row['零售价'] != null) updates.retail_price = row['零售价']
+          if (row['库存'] != null) updates.stock = row['库存']
+          const prodUpdates = {}
+          if (row['产品名称']) prodUpdates.name = row['产品名称']
+          if (row['品牌']) prodUpdates.brand = row['品牌']
+          const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0]
+          if (catKey) prodUpdates.category = catKey
+          if (Object.keys(updates).length) await supabase.from('product_skus').update(updates).eq('id', row._existingSku.id)
+          if (Object.keys(prodUpdates).length) await supabase.from('products').update(prodUpdates).eq('id', row._existingSku.product_id)
+          updated++
         }
-        if (Object.keys(prodUpdates).length) {
-          await supabase.from('products').update(prodUpdates).eq('id', row._existingSku.product_id)
+      }
+    } else {
+      // 套装导入
+      const { data: allSkus } = await supabase.from('product_skus').select('id, sku_code, product_id')
+      const skuIdMap = {}
+      ;(allSkus || []).forEach(s => { skuIdMap[s.sku_code] = s })
+
+      for (const bundle of importBundles.value) {
+        if (bundle._isNew) {
+          // Create bundle product + SKU + bundle_items
+          const { data: product, error: pe } = await supabase.from('products').insert({
+            name: bundle.name, cost_price: bundle.cost_price, retail_price: bundle.retail_price,
+            product_type: 'bundle', status: 'active',
+          }).select().single()
+          if (pe) { console.error('创建套装失败:', bundle.code, pe.message); continue }
+          const { data: sku, error: se } = await supabase.from('product_skus').insert({
+            product_id: product.id, sku_code: bundle.code,
+            cost_price: bundle.cost_price, retail_price: bundle.retail_price, stock: bundle.stock ?? 0,
+          }).select().single()
+          if (se) { console.error('创建套装SKU失败:', bundle.code, se.message); continue }
+          // Create bundle_items
+          const items = bundle.items.map((item, i) => ({
+            bundle_id: product.id,
+            sku_id: skuIdMap[item.childSkuCode]?.id,
+            quantity: item.quantity,
+            sort_order: i,
+          })).filter(item => item.sku_id)
+          if (items.length) await supabase.from('bundle_items').insert(items)
+          created++
+        } else {
+          // Update existing bundle
+          const updates = {}
+          if (bundle.cost_price != null) updates.cost_price = bundle.cost_price
+          if (bundle.retail_price != null) updates.retail_price = bundle.retail_price
+          if (bundle.stock != null) updates.stock = bundle.stock
+          if (bundle.name) {
+            await supabase.from('products').update({ name: bundle.name }).eq('id', bundle._existingSku.product_id)
+          }
+          if (Object.keys(updates).length) await supabase.from('product_skus').update(updates).eq('id', bundle._existingSku.id)
+          // Replace bundle items
+          if (bundle.items.length) {
+            await supabase.from('bundle_items').delete().eq('bundle_id', bundle._existingSku.product_id)
+            const items = bundle.items.map((item, i) => ({
+              bundle_id: bundle._existingSku.product_id,
+              sku_id: skuIdMap[item.childSkuCode]?.id,
+              quantity: item.quantity,
+              sort_order: i,
+            })).filter(item => item.sku_id)
+            if (items.length) await supabase.from('bundle_items').insert(items)
+          }
+          updated++
         }
-        updated++
       }
     }
+
     importResult.value = { created, updated }
     importStep.value = 3
   } catch (e) {
@@ -966,6 +1098,7 @@ function closeImport() {
   importStep.value = 1
   importFile.value = null
   importPreview.value = []
+  importBundles.value = []
   importResult.value = { created: 0, updated: 0 }
   loadProducts()
   loadSummary()
