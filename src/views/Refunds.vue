@@ -212,9 +212,9 @@
             <div class="relative">
               <input
                 v-model="accountSearch"
-                @focus="showAccountDropdown = true"
+                @focus="onAccountFocus"
                 @blur="setTimeout(() => showAccountDropdown = false, 200)"
-                placeholder="搜索账户代码..."
+                placeholder="点击选择付款账户..."
                 class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               />
               <button type="button" v-if="form.refund_from_account_id" @click="clearAccountSelection" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 cursor-pointer">&times;</button>
@@ -391,7 +391,10 @@ const filteredAccountGroups = computed(() => {
   const kw = accountSearch.value.toLowerCase()
   const filtered = {}
   for (const [ip, accs] of Object.entries(allGroups)) {
-    const matched = accs.filter(a => (a.code || '').toLowerCase().includes(kw))
+    const matched = accs.filter(a =>
+      (a.code || '').toLowerCase().includes(kw) ||
+      (a.short_name || '').toLowerCase().includes(kw)
+    )
     if (matched.length > 0) filtered[ip] = matched
   }
   return filtered
@@ -446,6 +449,12 @@ function selectAccount(acc) {
 function clearAccountSelection() {
   form.refund_from_account_id = ''
   accountSearch.value = ''
+}
+
+// 聚焦付款账户输入框时，清空搜索文本显示所有账户
+function onAccountFocus() {
+  accountSearch.value = ''
+  showAccountDropdown.value = true
 }
 
 const filteredRefunds = computed(() => {
