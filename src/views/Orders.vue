@@ -1098,11 +1098,6 @@ function selectSharedSales(s) {
   form.sharedSalesSearch = s.name
   sharedSalesDropdown.value = false
 }
-// 监听 order_source 变化，加载销售列表
-watch(() => form.order_source, (val) => {
-  if (val === 'shared') loadSalesProfiles()
-  else { form.shared_sales_id = null; form.sharedSalesSearch = '' }
-})
 
 async function quickCreateAccount() {
   const name = quickAccountForm.short_name.trim()
@@ -1713,6 +1708,12 @@ const defaultForm = () => ({
 })
 
 const form = reactive(defaultForm())
+
+// 监听 order_source 变化，加载销售列表
+watch(() => form.order_source, (val) => {
+  if (val === 'shared') loadSalesProfiles()
+  else { form.shared_sales_id = null; form.sharedSalesSearch = '' }
+})
 
 // ---------- 产品分类自动识别 ----------
 const CATEGORY_KEYWORDS = {
