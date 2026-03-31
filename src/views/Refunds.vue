@@ -335,6 +335,7 @@ const form = reactive({
 // 付款账户输入文本（可读写，用于搜索和显示）
 const orderSearch = ref('')
 const accountInputText = ref('')
+const showOrderDropdown = ref(false)
 const showAccountDropdown = ref(false)
 const orderProducts = ref([]) // 选中订单的产品明细
 
