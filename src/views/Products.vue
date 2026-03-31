@@ -61,17 +61,16 @@
           <span class="text-2xl shrink-0 mt-0.5">{{ p.image || '📦' }}</span>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-xs font-mono text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">{{ firstSkuCode(p) }}</span>
               <span class="font-medium text-gray-800 truncate">{{ p.name }}</span>
-              <span v-if="p.spu_code" class="text-xs text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{{ p.spu_code }}</span>
               <span :class="typeColor(p.product_type)" class="text-xs px-1.5 py-0.5 rounded">{{ typeLabel(p.product_type) }}</span>
               <span :class="p.status === 'active' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-100'" class="text-xs px-1.5 py-0.5 rounded">{{ p.status === 'active' ? '上架' : '下架' }}</span>
             </div>
             <div class="flex items-center gap-3 mt-1 text-xs text-gray-400">
               <span v-if="p.brand">{{ p.brand }}</span>
               <span v-if="p.category">{{ PRODUCT_ITEM_CATEGORIES[p.category] || p.category }}</span>
-              <span v-if="p.sub_category">{{ p.sub_category }}</span>
-              <span v-if="p.retail_price" class="text-gray-600 font-medium">¥{{ p.retail_price }}</span>
-              <span v-if="!p.retail_price" class="text-gray-300">未定价</span>
+              <span v-if="canSeeCost">成本: <span class="text-red-500">¥{{ p.cost_price || 0 }}</span></span>
+              <span>零售: <span class="text-gray-600 font-medium">¥{{ p.retail_price || '未定价' }}</span></span>
             </div>
           </div>
           <div class="shrink-0 flex items-center gap-1">
@@ -376,6 +375,12 @@ const saving = ref(false)
 const typeLabel = (t) => ({ single: '单品', course: '课程', bundle: '套装', gift_bag: '福袋' })[t] || '单品'
 const typeColor = (t) => ({ single: 'bg-blue-50 text-blue-600', course: 'bg-purple-50 text-purple-600', bundle: 'bg-orange-50 text-orange-600', gift_bag: 'bg-red-50 text-red-600' })[t] || 'bg-gray-50 text-gray-500'
 const skuCount = (pid) => (skusMap[pid] || []).length
+
+// 获取产品第一个SKU的编码
+function firstSkuCode(p) {
+  const skus = skusMap[p.id] || []
+  return skus.length > 0 ? (skus[0].sku_code || '未编码') : '未编码'
+}
 
 function getBundleItemName(item) {
   const ps = item.product_skus
