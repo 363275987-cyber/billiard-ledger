@@ -395,12 +395,6 @@
                     <button @click="approveLog(log)" class="text-[10px] text-green-500 hover:text-green-700 cursor-pointer" title="通过">✅</button>
                     <button @click="rejectLog(log)" class="text-[10px] text-red-500 hover:text-red-700 cursor-pointer" title="驳回">❌</button>
                   </template>
-                  <button
-                    v-if="authStore.isAdmin"
-                    @click="deleteLog(log.id)"
-                    class="text-gray-300 hover:text-red-500 text-xs cursor-pointer"
-                    title="删除日志"
-                  >🗑️</button>
                 </div>
               </div>
             </div>
@@ -695,13 +689,6 @@ watch(showLogModal, async (val) => {
     loadingLogs.value = false
   }
 })
-
-async function deleteLog(logId) {
-  if (!confirm('确定要删除这条日志吗？')) return
-  await supabase.from('balance_change_logs').delete().eq('id', logId)
-  balanceLogs.value = balanceLogs.value.filter(l => l.id !== logId)
-  toast('日志已删除', 'success')
-}
 
 async function approveLog(log) {
   // 审核通过：更新余额 + 更新日志状态
