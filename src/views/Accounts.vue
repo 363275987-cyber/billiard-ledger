@@ -6,13 +6,6 @@
       <div class="flex items-center gap-2">
         <button v-if="canManage" @click="openSortModal" class="px-3 py-2 bg-white text-gray-500 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition cursor-pointer">🔀 排序</button>
         <button
-          v-if="authStore.isAdmin"
-          @click="showLogModal = true"
-          class="text-gray-500 px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50 transition cursor-pointer"
-        >
-          📜 余额日志
-        </button>
-        <button
           v-if="canManage"
           @click="openModal()"
           class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer"
@@ -349,59 +342,6 @@
       </div>
     </Teleport>
 
-    <!-- Balance Change Log Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showLogModal"
-        class="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-        @click.self="showLogModal = false"
-      >
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-            <h2 class="font-bold text-gray-800">📜 余额修改日志</h2>
-            <button @click="showLogModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">✕</button>
-          </div>
-          <div class="p-6 overflow-y-auto flex-1">
-            <div v-if="loadingLogs" class="text-center text-gray-400 py-8">加载中...</div>
-            <div v-else-if="balanceLogs.length === 0" class="text-center text-gray-400 py-8">暂无修改记录</div>
-            <div v-else class="space-y-3">
-              <div v-for="log in balanceLogs" :key="log.id" class="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
-                <div>
-                  <div class="text-sm font-medium text-gray-800">{{ log.account_name }}</div>
-                  <div class="text-xs text-gray-400 mt-0.5">
-                    {{ formatDate(log.created_at, 'datetime') }} · {{ log.reason }}
-                    <span v-if="log.requested_by_name"> · 发起人: {{ log.requested_by_name }}</span>
-                    <span v-if="log.approved_by_name"> · 审核人: {{ log.approved_by_name }}</span>
-                  </div>
-                </div>
-                <div class="text-right flex items-center gap-2">
-                  <span
-                    v-if="log.status === 'pending'"
-                    class="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-600 shrink-0"
-                  >⏳ 待审核</span>
-                  <span
-                    v-else-if="log.status === 'approved'"
-                    class="text-[10px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 shrink-0"
-                  >✅ 已通过</span>
-                  <span
-                    v-else-if="log.status === 'rejected'"
-                    class="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 shrink-0"
-                  >❌ 已驳回</span>
-                  <span class="text-sm text-gray-400 line-through">¥{{ Number(log.old_balance).toFixed(2) }}</span>
-                  <span class="text-sm">→</span>
-                  <span class="text-sm font-bold" :class="Number(log.new_balance) >= 0 ? 'text-green-600' : 'text-red-500'">¥{{ Number(log.new_balance).toFixed(2) }}</span>
-                  <!-- admin审核按钮 -->
-                  <template v-if="authStore.isAdmin && log.status === 'pending'">
-                    <button @click="approveLog(log)" class="text-[10px] text-green-500 hover:text-green-700 cursor-pointer" title="通过">✅</button>
-                    <button @click="rejectLog(log)" class="text-[10px] text-red-500 hover:text-red-700 cursor-pointer" title="驳回">❌</button>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
     <!-- Account Transactions Modal -->
     <AccountTransactions
       :visible="showTxn"
@@ -469,9 +409,7 @@ const saving = ref(false)
 const showModal = ref(false)
 
 const selectedIds = ref([])
-const showLogModal = ref(false)
-const balanceLogs = ref([])
-const loadingLogs = ref(false)
+
 const showTxn = ref(false)
 const txnAccountId = ref('')
 const txnAccountName = ref('')
@@ -668,28 +606,6 @@ function highlightKeyword(text) {
 }
 
 // --- Balance Change Logs ---
-watch(showLogModal, async (val) => {
-  if (val) {
-    loadingLogs.value = true
-    const { data } = await supabase.from('balance_change_logs').select('*').order('created_at', { ascending: false }).limit(100)
-    if (data && data.length > 0) {
-      // 批量获取发起人和审核人姓名
-      const userIds = [...new Set(data.map(l => [l.requested_by, l.approved_by]).flat())].filter(Boolean)
-      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', userIds)
-      const nameMap = {}
-      ;(profiles || []).forEach(p => { nameMap[p.id] = p.name })
-      balanceLogs.value = data.map(l => ({
-        ...l,
-        requested_by_name: nameMap[l.requested_by] || '未知',
-        approved_by_name: l.approved_by ? (nameMap[l.approved_by] || '未知') : null,
-      }))
-    } else {
-      balanceLogs.value = []
-    }
-    loadingLogs.value = false
-  }
-})
-
 async function approveLog(log) {
   // 审核通过：更新余额 + 更新日志状态
   await supabase.from('accounts').update({ balance: Number(log.new_balance) }).eq('id', log.account_id)
