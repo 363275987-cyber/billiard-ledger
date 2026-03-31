@@ -334,22 +334,16 @@
       <table v-else class="w-full text-sm">
         <thead>
           <tr class="bg-gray-50 text-gray-600">
-            <th v-if="canDeleteOrders" class="px-4 py-3 text-center w-10">
+            <th v-if="canDeleteOrders" class="px-3 py-3 text-center w-10">
               <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" class="rounded cursor-pointer">
             </th>
-            <th class="px-4 py-3 text-left font-medium">时间</th>
-            <th class="px-4 py-3 text-left font-medium">客服号</th>
-            <th class="px-4 py-3 text-left font-medium">收款账户</th>
-            <th class="px-4 py-3 text-left font-medium">店铺账户</th>
-            <th class="px-4 py-3 text-left font-medium">客户</th>
-            <th class="px-4 py-3 text-left font-medium">产品类型</th>
-            <th class="px-4 py-3 text-left font-medium">产品名</th>
-            <th class="px-4 py-3 text-right font-medium">金额</th>
-            <th class="px-4 py-3 text-left font-medium">业绩归属</th>
-            <th class="px-4 py-3 text-center font-medium">来源</th>
-            <th class="px-4 py-3 text-center font-medium">平台</th>
-            <th class="px-4 py-3 text-center font-medium">状态</th>
-            <th class="px-4 py-3 text-center font-medium" v-if="canEdit">操作</th>
+            <th class="px-3 py-3 text-left font-medium">时间</th>
+            <th class="px-3 py-3 text-left font-medium">店铺账户</th>
+            <th class="px-3 py-3 text-left font-medium">客户/商品</th>
+            <th class="px-3 py-3 text-right font-medium">金额</th>
+            <th class="px-3 py-3 text-center font-medium">平台</th>
+            <th class="px-3 py-3 text-center font-medium">状态</th>
+            <th class="px-3 py-3 text-center font-medium" v-if="canEdit">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -358,47 +352,27 @@
             :key="order.id"
             class="border-t border-gray-50 hover:bg-gray-50/60"
           >
-            <td v-if="canDeleteOrders" class="px-4 py-3 text-center">
+            <td v-if="canDeleteOrders" class="px-3 py-3 text-center">
               <input type="checkbox" :value="order.id" v-model="selectedOrders" class="rounded cursor-pointer">
             </td>
-            <td class="px-4 py-3 text-gray-500 whitespace-nowrap">{{ formatDate(order.created_at) }}</td>
-            <td class="px-4 py-3">
-              <span v-if="order.service_number_code" class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">{{ order.service_number_code }}</span>
-              <span v-else class="text-gray-300 text-xs">—</span>
-            </td>
-            <td class="px-4 py-3">
-              <span v-if="order.account_id" class="text-xs">{{ getAccountName(order.account_id) }}</span>
-              <span v-else-if="order.payment_method" class="px-2 py-0.5 rounded text-xs font-medium" :class="paymentMethodClass(order.payment_method)">{{ paymentMethodLabel(order.payment_method) }}</span>
-              <span v-else class="text-gray-300 text-xs">—</span>
-            </td>
-            <td class="px-4 py-3">
+            <td class="px-3 py-3 text-gray-500 whitespace-nowrap text-xs">{{ formatDate(order.created_at) }}</td>
+            <td class="px-3 py-3">
               <span v-if="order.platform_type" class="text-xs text-gray-600">{{ order.platform_store || '—' }}</span>
               <span v-else-if="order.account_id" class="text-xs text-gray-600">{{ getAccountShortName(order.account_id) }}</span>
               <span v-else class="text-gray-300 text-xs">—</span>
             </td>
-            <td class="px-4 py-3 text-gray-800">
+            <td class="px-3 py-3">
               <div class="flex items-center gap-1.5">
-                <span>{{ order.customer_name }}</span>
+                <span v-if="order.customer_name" class="text-gray-800">{{ order.customer_name }}</span>
                 <span v-if="order.platform_type" class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium" :class="platformTypeTagClass(order.platform_type)">{{ platformTypeTagLabel(order.platform_type) }}</span>
               </div>
+              <div class="text-xs text-gray-500 truncate max-w-[200px]" :title="order.product_name">{{ order.product_name || '—' }}</div>
               <div v-if="order.customer_phone" class="text-xs text-gray-400">{{ order.customer_phone }}</div>
             </td>
-            <td class="px-4 py-3 text-gray-500">{{ PRODUCT_CATEGORIES[order.product_category] || order.product_category }}</td>
-            <td class="px-4 py-3 text-gray-800 max-w-[160px] truncate" :title="order.product_name">{{ order.product_name }}</td>
-            <td class="px-4 py-3 text-right font-medium text-green-600 whitespace-nowrap">
+            <td class="px-3 py-3 text-right font-medium text-green-600 whitespace-nowrap">
               {{ formatMoney(order.amount) }}
             </td>
-            <td class="px-4 py-3 text-gray-500 text-xs">
-              {{ order.sales_profile?.name || order.sales_name || '—' }}
-              <span v-if="order.order_source === 'shared' && order.shared_sales_name" class="text-amber-600"> + {{ order.shared_sales_name }}</span>
-            </td>
-            <td class="px-4 py-3 text-center">
-              <span :class="order.order_source === 'shared' ? 'text-amber-600 bg-amber-50' : order.order_source === 'sales_guided' ? 'text-blue-600' : order.order_source === 'organic' ? 'text-gray-400' : 'text-purple-600'"
-                class="text-xs px-1.5 py-0.5 rounded">
-                {{ ORDER_SOURCE_LABELS[order.order_source] || '—' }}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-3 text-center">
               <template v-if="order.platform_type">
                 <span class="px-1.5 py-0.5 rounded text-xs" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
               </template>
@@ -406,14 +380,14 @@
               <div v-if="order.external_order_no" class="text-[10px] text-gray-400 font-mono mt-0.5 max-w-[100px] truncate" :title="order.external_order_no">{{ order.external_order_no }}</div>
               <div v-if="order.sku_code" class="text-[10px] text-purple-400 font-mono">SKU: {{ order.sku_code }}</div>
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-3 text-center">
               <span
                 :class="[ORDER_STATUS[order.status]?.class, 'px-2 py-0.5 rounded text-xs']"
               >
                 {{ ORDER_STATUS[order.status]?.label || order.status }}
               </span>
             </td>
-            <td class="px-4 py-3 text-center" v-if="canEdit">
+            <td class="px-3 py-3 text-center" v-if="canEdit">
               <div class="flex items-center justify-center gap-1">
                 <button v-if="order.status === 'pending'" @click="handleConfirmPayment(order)" class="text-green-600 hover:text-green-800 text-xs px-2 py-1 rounded hover:bg-green-50 transition cursor-pointer">确认收款</button>
                 <button
