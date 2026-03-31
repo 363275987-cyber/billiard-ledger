@@ -106,12 +106,85 @@
               <span v-if="currentSnapshot.admin_reason" class="text-xs opacity-60 ml-1">({{ currentSnapshot.admin_reason }})</span>
             </div>
             <div class="flex justify-between items-center py-2">
-              <span class="font-bold text-lg text-gray-800">期末余额</span>
+              <span class="font-bold text-lg text-gray-800">期末余额（系统计算）</span>
               <span class="font-bold text-2xl"
                 :class="currentSnapshot.closing_balance >= 0 ? 'text-green-600' : 'text-red-500'">
                 {{ formatMoney(currentSnapshot.closing_balance) }}
               </span>
             </div>
+          </div>
+        </div>
+
+        <!-- ===== 对账区域 ===== -->
+        <div class="bg-white rounded-xl border-2 p-6 mb-6"
+          :class="reconStatus === 'matched' ? 'border-green-300' : reconStatus === 'mismatch' ? 'border-red-300' : 'border-gray-200'">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold text-gray-700">🔍 月底对账</h2>
+            <span v-if="reconStatus === 'matched'" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">✅ 已对平</span>
+            <span v-else-if="reconStatus === 'mismatch'" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">❌ 有差额</span>
+            <span v-else class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">待对账</span>
+          </div>
+
+          <!-- 对比区域 -->
+          <div class="grid grid-cols-3 gap-4 mb-4">
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+              <div class="text-xs text-gray-500 mb-1">系统计算</div>
+              <div class="text-lg font-bold text-gray-800">{{ formatMoney(currentSnapshot.closing_balance) }}</div>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded-lg">
+              <div class="text-xs text-gray-500 mb-1">实际余额</div>
+              <div v-if="editingActual" class="flex items-center gap-1 justify-center">
+                <span class="text-xs text-gray-400">¥</span>
+                <input v-model.number="actualInput" type="number" step="0.01"
+                  class="w-28 px-2 py-1 border border-gray-300 rounded text-lg font-bold text-center outline-none focus:ring-2 focus:ring-blue-400"
+                  @keyup.enter="saveActual" @keyup.escape="cancelActual">
+              </div>
+              <div v-else class="text-lg font-bold"
+                :class="currentSnapshot.actual_balance != null ? 'text-gray-800' : 'text-gray-400'">
+                {{ currentSnapshot.actual_balance != null ? formatMoney(currentSnapshot.actual_balance) : '未填写' }}
+                <button @click="startEditActual" class="ml-1 text-blue-500 hover:text-blue-700 cursor-pointer">✏️</button>
+              </div>
+            </div>
+            <div class="text-center p-4 rounded-lg"
+              :class="reconStatus === 'matched' ? 'bg-green-50' : reconStatus === 'mismatch' ? 'bg-red-50' : 'bg-gray-50'">
+              <div class="text-xs text-gray-500 mb-1">差额</div>
+              <div class="text-lg font-bold"
+                :class="reconStatus === 'matched' ? 'text-green-600' : reconStatus === 'mismatch' ? 'text-red-600' : 'text-gray-400'">
+                {{ currentSnapshot.actual_balance != null ? (currentSnapshot.balance_diff > 0 ? '+' : '') + formatMoney(currentSnapshot.balance_diff) : '—' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- 差额说明 -->
+          <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1">差额说明（选填）</label>
+            <textarea v-model="diffReasonInput" rows="2" placeholder="例如：微信提现手续费未记录、银行扣了年费..."
+              class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400 resize-none"></textarea>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="flex gap-2">
+            <button v-if="editingActual" @click="saveActual"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer">
+              💾 保存对账
+            </button>
+            <button v-else @click="startEditActual"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer">
+              📝 填写实际余额
+            </button>
+            <button v-if="editingActual" @click="cancelActual"
+              class="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 cursor-pointer">
+              取消
+            </button>
+            <button v-if="reconStatus === 'mismatch' && !editingActual" @click="showDetailDrilldown = !showDetailDrilldown"
+              class="px-4 py-2 border border-orange-200 bg-orange-50 text-orange-700 rounded-lg text-sm hover:bg-orange-100 cursor-pointer">
+              📋 查看明细
+            </button>
+          </div>
+
+          <!-- 明细展开区域 -->
+          <div v-if="showDetailDrilldown" class="mt-4 border-t border-gray-100 pt-4">
+            <DrilldownDetail :account-id="selectedAccountId" :period="currentMonth" />
           </div>
         </div>
 
@@ -263,6 +336,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 import { formatMoney, toast, formatDate } from '../lib/utils'
+import DrilldownDetail from '../components/DrilldownDetail.vue'
 
 const auth = useAuthStore()
 const loading = ref(true)
@@ -453,6 +527,51 @@ async function executeSettle() {
   } finally {
     settling.value = false
   }
+}
+
+// --- 对账（Reconciliation） ---
+const editingActual = ref(false)
+const actualInput = ref(null)
+const diffReasonInput = ref('')
+const showDetailDrilldown = ref(false)
+
+const reconStatus = computed(() => {
+  if (!currentSnapshot.value || currentSnapshot.value.actual_balance == null) return 'pending'
+  if (Math.abs(currentSnapshot.value.balance_diff) < 0.01) return 'matched'
+  return 'mismatch'
+})
+
+function startEditActual() {
+  actualInput.value = currentSnapshot.value.actual_balance ?? null
+  diffReasonInput.value = currentSnapshot.value.diff_reason ?? ''
+  editingActual.value = true
+}
+
+function cancelActual() {
+  editingActual.value = false
+  actualInput.value = null
+}
+
+async function saveActual() {
+  const userId = (await supabase.auth.getSession()).data.session?.user?.id
+  const { error } = await supabase
+    .from('balance_snapshots')
+    .update({
+      actual_balance: actualInput.value ?? null,
+      diff_reason: diffReasonInput.value || null,
+      reconciled_by: userId,
+      reconciled_at: new Date().toISOString(),
+    })
+    .eq('id', currentSnapshot.value.id)
+  if (error) throw error
+  // 刷新快照数据
+  Object.assign(currentSnapshot.value, {
+    actual_balance: actualInput.value,
+    balance_diff: (actualInput.value ?? 0) - (currentSnapshot.value.closing_balance ?? 0),
+    diff_reason: diffReasonInput.value || null,
+  })
+  editingActual.value = false
+  toast('对账已保存', 'success')
 }
 
 // --- History ---

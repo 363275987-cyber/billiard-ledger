@@ -95,10 +95,11 @@ export const useOrderStore = defineStore('orders', {
       if (error) throw error
       this.orders.unshift(data)
 
-      // 自动更新对应账户余额
+      // 自动更新对应账户余额（仅 completed 状态才加余额）
       let balBefore = null
       let balAfter = null
-      if (payload.account_id && payload.amount) {
+      const orderStatus = payload.status || data.status || 'completed'
+      if (payload.account_id && payload.amount && orderStatus === 'completed') {
         const { useAccountStore } = await import('./accounts')
         const accStore = useAccountStore()
         balBefore = accStore.accounts.find(a => a.id === payload.account_id)?.balance ?? null
@@ -107,7 +108,6 @@ export const useOrderStore = defineStore('orders', {
           balAfter = accStore.accounts.find(a => a.id === payload.account_id)?.balance ?? null
         } catch (e) {
           console.error('余额更新失败，订单已创建但余额未更新:', e)
-          // 不阻止订单创建，但在日志中标记
         }
       }
 
@@ -142,6 +142,10 @@ export const useOrderStore = defineStore('orders', {
       // 记录变更前的快照（用于后续余额调整）
       const oldOrder = this.orders.find(o => o.id === id)
       const needCancelRefund = oldOrder && updates.status === 'cancelled' && oldOrder.status !== 'cancelled'
+        && oldOrder.account_id && oldOrder.amount && Number(oldOrder.amount) > 0
+      // 订单从 pending 变成 completed 时，增加余额
+      const needCompleteAdd = oldOrder && updates.status === 'completed' && oldOrder.status !== 'completed'
+        && oldOrder.status !== 'partially_refunded'
         && oldOrder.account_id && oldOrder.amount && Number(oldOrder.amount) > 0
       const amountDelta = (updates.amount !== undefined && oldOrder && Number(updates.amount) !== Number(oldOrder.amount))
         ? Number(updates.amount) - Number(oldOrder.amount || 0)
@@ -189,6 +193,35 @@ export const useOrderStore = defineStore('orders', {
           } catch (_) {}
         } catch (e) {
           console.error('❌ 取消订单余额回退失败（订单已取消但余额未退），需手动处理！订单:', oldOrder.order_no, '账户:', oldOrder.account_id, '金额:', oldOrder.amount, e)
+        }
+      }
+
+      // 订单状态变更为 completed：增加余额
+      if (needCompleteAdd) {
+        try {
+          const balBefore = accStore.accounts.find(a => a.id === oldOrder.account_id)?.balance ?? null
+          await accStore.updateBalance(oldOrder.account_id, Number(oldOrder.amount))
+          const balAfter = accStore.accounts.find(a => a.id === oldOrder.account_id)?.balance ?? null
+          try {
+            const accInfo = await getAccountBalance(oldOrder.account_id)
+            const accName = accInfo?.name || ''
+            const balText = balBefore != null && balAfter != null
+              ? `，余额 ${Number(balBefore).toFixed(2)} + ${Math.abs(Number(balAfter) - Number(balBefore)).toFixed(2)} → ${Number(balAfter).toFixed(2)}`
+              : ''
+            logOperation({
+              action: 'complete_order',
+              module: '订单',
+              description: `订单确认完成 ${oldOrder.order_no || ''}，增加余额 ${formatMoneyStr(oldOrder.amount)}，客户：${oldOrder.customer_name || ''}，账户：${accName}${balText}`,
+              detail: { order_id: id, order_no: oldOrder.order_no, amount: oldOrder.amount, customer_name: oldOrder.customer_name, account_id: oldOrder.account_id, account_name: accName, balance_before: balBefore, balance_after: balAfter },
+              amount: oldOrder.amount,
+              accountId: oldOrder.account_id,
+              accountName: accName,
+              balanceBefore: balBefore,
+              balanceAfter: balAfter,
+            })
+          } catch (_) {}
+        } catch (e) {
+          console.error('❌ 订单完成余额增加失败，需手动处理！订单:', oldOrder.order_no, '账户:', oldOrder.account_id, '金额:', oldOrder.amount, e)
         }
       }
 
