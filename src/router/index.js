@@ -39,6 +39,7 @@ const routes = [
       { path: 'inventory', name: 'Inventory', component: () => import('../views/Inventory.vue'), meta: { title: '库存管理' } },
       { path: 'inventory-logs', name: 'InventoryLogs', component: () => import('../views/InventoryLogs.vue'), meta: { title: '库存流水' } },
       { path: 'purchase-orders', name: 'PurchaseOrders', component: () => import('../views/PurchaseOrders.vue') },
+      { path: 'ecommerce', name: 'Ecommerce', component: () => import('../views/Ecommerce.vue') },
     ]
   },
   // 404

@@ -266,6 +266,15 @@ const menuGroups = computed(() => {
     ],
   })
 
+  // 🏪 电商店铺 — 电商数据看板
+  groups.push({
+    icon: '🏪',
+    label: '电商店铺',
+    items: [
+      { label: '电商看板', path: '/ecommerce' },
+    ],
+  })
+
   // 💰 财务管理 — 钱进出
   groups.push({
     icon: '💰',
