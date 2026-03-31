@@ -69,8 +69,8 @@
             <div class="flex items-center gap-3 mt-1 text-xs text-gray-400">
               <span v-if="p.brand">{{ p.brand }}</span>
               <span v-if="p.category">{{ PRODUCT_ITEM_CATEGORIES[p.category] || p.category }}</span>
-              <span v-if="canSeeCost">成本: <span class="text-red-500">¥{{ p.cost_price || 0 }}</span></span>
-              <span>零售: <span class="text-gray-600 font-medium">¥{{ p.retail_price || '未定价' }}</span></span>
+              <span class="text-red-500">成本: ¥{{ p.cost_price || 0 }}</span>
+              <span class="text-gray-700 font-medium">零售: ¥{{ p.retail_price || '未定价' }}</span>
             </div>
           </div>
           <div class="shrink-0 flex items-center gap-1">
