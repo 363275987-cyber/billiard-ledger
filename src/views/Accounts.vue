@@ -483,6 +483,7 @@ const PLATFORM_ICONS = {
   taobao: '🟡',
   kuaishou: '🟣',
   weixin_video: '🟤',
+  shipinhao: '🟤',
   jd: '🟠',
   bank: '🏦',
   cash: '💵',
@@ -490,7 +491,7 @@ const PLATFORM_ICONS = {
 }
 
 // --- Account category ---
-const ECOMMERCE_PLATFORMS = ['douyin', 'weixin_video', 'taobao', 'kuaishou', 'youzan', 'jd', 'xiaohongshu', 'pinduoduo']
+const ECOMMERCE_PLATFORMS = ['douyin', 'weixin_video', 'shipinhao', 'taobao', 'kuaishou', 'youzan', 'jd', 'xiaohongshu', 'pinduoduo']
 const PERSONAL_PLATFORMS = ['wechat', 'alipay', 'cash', 'bank']
 const CATEGORY_LABELS = { ecommerce: '🛒 电商账户', company: '🏢 企业账户', personal: '👤 个人账户' }
 
@@ -519,7 +520,7 @@ function platformIcon(platform) {
 }
 
 function platformLabel(platform) {
-  const labels = { wechat: '微信', alipay: '支付宝', youzan: '有赞', douyin: '抖音', taobao: '淘宝', kuaishou: '快手', weixin_video: '视频号', jd: '京东' }
+  const labels = { wechat: '微信', alipay: '支付宝', youzan: '有赞', douyin: '抖音', taobao: '淘宝', kuaishou: '快手', weixin_video: '视频号', shipinhao: '视频号', jd: '京东' }
   return labels[platform] || platform || '其他'
 }
 
@@ -531,6 +532,7 @@ function platformIconBg(platform) {
     taobao: 'bg-orange-400',
     kuaishou: 'bg-purple-500',
     weixin_video: 'bg-amber-500',
+    shipinhao: 'bg-amber-500',
     bank: 'bg-slate-500',
     cash: 'bg-teal-400',
     youzan: 'bg-rose-400',
@@ -547,6 +549,7 @@ function platformGradient(platform) {
     taobao: 'linear-gradient(135deg, #ff6a00, #ee0979)',
     kuaishou: 'linear-gradient(135deg, #ff4906, #ff0000)',
     weixin_video: 'linear-gradient(135deg, #fa9d3b, #f27121)',
+    shipinhao: 'linear-gradient(135deg, #fa9d3b, #f27121)',
     bank: 'linear-gradient(135deg, #4a5568, #2d3748)',
     cash: 'linear-gradient(135deg, #38b2ac, #319795)',
     youzan: 'linear-gradient(135deg, #e11d48, #be123c)',

@@ -425,7 +425,6 @@ const form = reactive({
 const PLATFORM_FEE_RATES = {
   douyin:       { technical: 5, payment: 0.6, withdraw: 0.6, label: '抖音电商' },
   kuaishou:     { technical: 5, payment: 0.6, withdraw: 0.3, label: '快手电商' },
-  weixin_video:  { technical: 2, payment: 0.6, withdraw: 0.1, label: '视频号' },
   shipinhao:    { technical: 2, payment: 0.6, withdraw: 0.1, label: '视频号' },
 }
 

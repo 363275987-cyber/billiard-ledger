@@ -250,7 +250,7 @@ async function loadFinanceDashboard() {
     supabase
       .from('orders')
       .select('amount')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'partially_refunded'])
       .gte('created_at', start)
       .lt('created_at', end)
       .is('platform_type', null),

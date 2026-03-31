@@ -471,7 +471,9 @@ export async function importEcommerceOrders({ salesOrders, afterSalesOrders, sup
       }
 
       // 匹配/创建账户
-      const accountId = await findOrCreateEcommerceAccount(sb, order.platform_type, order.platform_store)
+      const accountInfo = await findOrCreateEcommerceAccount(sb, order.platform_type, order.platform_store)
+      const accountId = accountInfo?.id || null
+      const accountShortName = accountInfo?.short_name || ''
 
       // 解析时间
       const orderTime = parseOrderTime(order.order_time)
@@ -489,6 +491,7 @@ export async function importEcommerceOrders({ salesOrders, afterSalesOrders, sup
         external_order_no: order.external_order_no,
         platform_type: order.platform_type,
         platform_store: order.platform_store,
+        account_code: order.platform_store || accountShortName,
         sku_code: order.sku_code || null,
         payment_amount: order.payment_amount,
         order_time: orderTime,
@@ -499,13 +502,15 @@ export async function importEcommerceOrders({ salesOrders, afterSalesOrders, sup
       }
 
       // 如果有 SKU 编码，尝试匹配产品
+      let productMatch = null
       if (order.sku_code) {
         try {
-          const { data: productMatch } = await sb.rpc('match_product_by_sku_code', {
+          const { data: pm } = await sb.rpc('match_product_by_sku_code', {
             p_sku_code: order.sku_code.trim()
           })
-          if (productMatch && productMatch.sku_id) {
-            payload.product_name = productMatch.product_name || ''
+          if (pm && pm.sku_id) {
+            productMatch = pm
+            payload.product_name = pm.product_name || ''
             // product_id 通过 order_items 关联
           }
         } catch (_) {
@@ -537,20 +542,15 @@ export async function importEcommerceOrders({ salesOrders, afterSalesOrders, sup
         existingExternalNos.add(`${order.platform_type}:${order.external_order_no}`)
       }
 
-      // 创建 order_items（如果有产品匹配）
-      if (order.sku_code) {
+      // 创建 order_items（复用已缓存的产品匹配结果）
+      if (productMatch) {
         try {
-          const { data: productMatch } = await sb.rpc('match_product_by_sku_code', {
-            p_sku_code: order.sku_code.trim()
+          await sb.from('order_items').insert({
+            order_id: created.id,
+            product_name: productMatch.product_name || '',
+            quantity: order.quantity || 1,
+            product_id: productMatch.product_id || null,
           })
-          if (productMatch && productMatch.sku_id) {
-            await sb.from('order_items').insert({
-              order_id: created.id,
-              product_name: productMatch.product_name || '',
-              quantity: order.quantity || 1,
-              product_id: productMatch.product_id || null,
-            })
-          }
         } catch (_) {}
       }
 
@@ -702,11 +702,11 @@ async function findOrCreateEcommerceAccount(sb, platformType, storeName) {
     const exactMatch = existing.find(a =>
       (a.short_name || '').includes(storeName)
     )
-    if (exactMatch) return exactMatch.id
+    if (exactMatch) return exactMatch
 
     // 匹配同平台账户
     const platformMatch = existing.find(a => a.platform === platformType)
-    if (platformMatch) return platformMatch.id
+    if (platformMatch) return platformMatch
   }
 
   // 自动创建新账户
@@ -717,6 +717,8 @@ async function findOrCreateEcommerceAccount(sb, platformType, storeName) {
         short_name: storeName,
         code: storeName,
         platform: platformType,
+        ecommerce_platform: platformType,
+        settlement_days: platformType === 'kuaishou' ? 7 : 15,
         balance: 0,
         opening_balance: 0,
         status: 'active',
@@ -725,7 +727,7 @@ async function findOrCreateEcommerceAccount(sb, platformType, storeName) {
       .single()
 
     if (error) throw error
-    return newAccount?.id
+    return newAccount || null
   } catch (e) {
     console.warn('自动创建账户失败:', storeName, e)
     return null
