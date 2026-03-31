@@ -766,6 +766,14 @@ async function batchAction(action) {
       await supabase.from('accounts').update({ status: 'active' }).in('id', ids)
       toast(`已启用 ${ids.length} 个账户`, 'success')
     } else if (action === 'delete') {
+      const withBalance = ids.filter(id => {
+        const acc = allAccounts.value.find(a => a.id === id)
+        return acc && Number(acc.balance || 0) > 0
+      })
+      if (withBalance.length > 0) {
+        toast(`${withBalance.length} 个账户仍有余额，请先处理`, 'warning')
+        return
+      }
       await supabase.from('accounts').update({ status: 'deleted' }).in('id', ids)
       toast(`已删除 ${ids.length} 个账户`, 'success')
     }
@@ -982,6 +990,11 @@ async function toggleFreeze(acc) {
 }
 
 async function handleDelete(acc) {
+  const bal = Number(acc.balance || 0)
+  if (bal > 0) {
+    toast(`账户余额 ¥${bal.toFixed(2)}，请先转出或对账清零后再删除`, 'warning')
+    return
+  }
   if (!confirm(`确定要删除账户「${acc.short_name || acc.code}」吗？`)) return
   try {
     await accountStore.deleteAccount(acc.id)
