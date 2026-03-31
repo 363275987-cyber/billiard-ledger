@@ -842,8 +842,6 @@ async function saveAccount() {
   try {
     if (isEditing.value) {
       const payload = {
-        platform: form.platform,
-        category: form.category || null,
         short_name: form.short_name.trim(),
         real_name: form.real_name?.trim() || null,
         cert_phone: form.cert_phone?.trim() || null,
@@ -907,7 +905,6 @@ async function saveAccount() {
     } else {
       const payload = {
         platform: form.platform,
-        category: form.category || null,
         short_name: form.short_name.trim(),
         code: form.short_name.trim(),
         real_name: form.real_name?.trim() || null,
