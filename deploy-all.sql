@@ -328,7 +328,7 @@ BEGIN
     (SELECT COUNT(DISTINCT date_trunc('month', o.created_at))
      FROM orders o WHERE o.customer_id = c.id
        AND o.created_at >= now() - interval '6 months')::int,
-    (SELECT array_agg(DISTINCT product_name ORDER BY count DESC LIMIT 3)
+    (SELECT COALESCE(array_agg(sub.pn), ARRAY[]::text[]) FROM (SELECT product_name AS pn FROM orders o WHERE o.customer_id = c.id GROUP BY product_name ORDER BY COUNT(*) DESC LIMIT 3) sub)
      FROM (SELECT product_name, COUNT(*) count FROM orders o
            WHERE o.customer_id = c.id GROUP BY product_name ORDER BY count DESC LIMIT 3) sub)::text[],
     COALESCE((SELECT COUNT(*)::int FROM refunds r

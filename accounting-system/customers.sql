@@ -181,7 +181,7 @@ BEGIN
      FROM orders o WHERE o.customer_id = c.id AND o.deleted_at IS NULL
        AND o.created_at >= now() - interval '6 months')::int,
     -- Top产品
-    (SELECT array_agg(DISTINCT product_name ORDER BY count DESC LIMIT 3)
+    (SELECT COALESCE(array_agg(sub.pn), ARRAY[]::text[]) FROM (SELECT product_name AS pn FROM orders o WHERE o.customer_id = c.id GROUP BY product_name ORDER BY COUNT(*) DESC LIMIT 3) sub)
      FROM (SELECT product_name, COUNT(*) count FROM orders o
            WHERE o.customer_id = c.id AND o.deleted_at IS NULL GROUP BY product_name ORDER BY count DESC LIMIT 3) sub)::text[],
     -- 退款统计
