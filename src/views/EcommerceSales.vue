@@ -7,7 +7,7 @@
         <button v-for="opt in dateOptions" :key="opt.key"
           @click="setDateRange(opt.key)"
           :class="activeRange === opt.key
-            ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white cursor-pointer'
+            ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white cursor-pointer'
             : 'px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 cursor-pointer'">
           {{ opt.label }}
         </button>
@@ -20,11 +20,28 @@
       </div>
     </div>
 
+    <!-- 平台Tab + 店铺筛选 -->
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div class="flex gap-1.5">
+        <button v-for="pt in platformTabOptions" :key="pt.key"
+          @click="activePlatformTab = pt.key"
+          :class="activePlatformTab === pt.key
+            ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-green-50 text-green-700 border border-green-300 cursor-pointer'
+            : 'px-3 py-1.5 rounded-lg text-sm text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 cursor-pointer'">
+          {{ pt.label }}
+        </button>
+      </div>
+      <select v-model="storeFilter" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 cursor-pointer focus:outline-none focus:border-green-300 focus:ring-1 focus:ring-green-300">
+        <option value="">全部店铺</option>
+        <option v-for="s in storeList" :key="s" :value="s">{{ s }}</option>
+      </select>
+    </div>
+
     <!-- 汇总卡片 -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
       <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
         <div class="text-xs text-gray-500 mb-1">销售额</div>
-        <div class="text-lg font-bold text-blue-600">¥{{ formatNum(summary.sales) }}</div>
+        <div class="text-lg font-bold text-green-600">¥{{ formatNum(summary.sales) }}</div>
         <div class="text-xs text-gray-400">{{ summary.orders }} 单</div>
       </div>
       <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -35,50 +52,43 @@
         <div class="text-xs text-gray-500 mb-1">净营业额</div>
         <div class="text-lg font-bold text-green-600">¥{{ formatNum(summary.net) }}</div>
       </div>
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div class="text-xs text-gray-500 mb-1">待结算资金</div>
-        <div class="text-lg font-bold text-purple-600">¥{{ formatNum(summary.pending) }}</div>
-      </div>
     </div>
 
-    <!-- 图表区 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <!-- 日趋势图 -->
-      <div class="lg:col-span-2 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-medium text-gray-700">日趋势</h3>
-          <div class="flex gap-1">
-            <button v-for="pt in platformTabs" :key="pt.key"
-              @click="togglePlatformFilter(pt.key)"
-              :class="platformFilter.includes(pt.key) ? 'text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 cursor-pointer' : 'text-xs px-2 py-1 rounded-full text-gray-400 hover:bg-gray-100 cursor-pointer'">
-              {{ pt.label }}
-            </button>
-          </div>
+    <!-- 待结算资金（分店铺） -->
+    <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+      <div class="text-xs text-gray-500 mb-3">🛒 待结算资金</div>
+      <div v-if="pendingByStore.length" class="space-y-0">
+        <div v-for="(item, idx) in pendingByStore" :key="item.name"
+          :class="[
+            'flex items-center justify-between py-2 px-1 text-sm rounded-lg',
+            storeFilter && storeFilter === item.name ? 'bg-green-50 font-medium' : ''
+          ]">
+          <span :class="storeFilter && storeFilter === item.name ? 'text-green-700' : 'text-gray-700'">{{ item.name }}</span>
+          <span :class="storeFilter && storeFilter === item.name ? 'text-green-700 font-bold' : 'text-gray-800 font-medium'">¥{{ formatNum(item.balance) }}</span>
         </div>
-        <div v-if="dailyData.length" style="height: 300px">
-          <v-chart :option="trendOption" autoresize />
+        <div class="border-t border-gray-200 mt-1 pt-2 px-1 flex items-center justify-between text-sm font-bold">
+          <span class="text-gray-800">合计</span>
+          <span class="text-green-600">¥{{ formatNum(totalPending) }}</span>
         </div>
-        <div v-else class="text-center text-gray-400 py-16 text-sm">暂无数据</div>
       </div>
+      <div v-else class="text-center text-gray-400 py-4 text-sm">暂无数据</div>
+    </div>
 
-      <!-- 平台分布 -->
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <h3 class="text-sm font-medium text-gray-700 mb-3">平台分布</h3>
-        <div v-if="platformData.length" style="height: 300px">
-          <v-chart :option="pieOption" autoresize />
-        </div>
-        <div v-else class="text-center text-gray-400 py-16 text-sm">暂无数据</div>
+    <!-- 日趋势折线图（全宽） -->
+    <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-medium text-gray-700">日趋势</h3>
       </div>
+      <div v-if="dailyData.length" style="height: 320px">
+        <v-chart :option="trendOption" autoresize />
+      </div>
+      <div v-else class="text-center text-gray-400 py-16 text-sm">暂无数据</div>
     </div>
 
     <!-- 店铺明细表 -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+      <div class="px-4 py-3 border-b border-gray-100">
         <h3 class="text-sm font-medium text-gray-700">店铺明细</h3>
-        <select v-model="storeFilter" class="px-2 py-1 border border-gray-200 rounded-lg text-sm">
-          <option value="">全部店铺</option>
-          <option v-for="s in storeList" :key="s" :value="s">{{ s }}</option>
-        </select>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -94,12 +104,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in filteredTableData" :key="row.order_date + row.account_id" class="border-t border-gray-100 hover:bg-gray-50">
+            <tr v-for="row in filteredTableData" :key="row.order_date + row.account_id"
+              :class="[
+                'border-t border-gray-100 hover:bg-gray-50',
+                storeFilter && storeFilter === row.store_name ? 'bg-green-50/50' : ''
+              ]">
               <td class="px-4 py-2 text-gray-600 text-xs">{{ row.order_date }}</td>
               <td class="px-3 py-2 font-medium text-gray-800 text-xs">{{ row.store_name }}</td>
               <td class="px-3 py-2 text-gray-500 text-xs">{{ platformLabel(row.ecommerce_platform) }}</td>
               <td class="px-3 py-2 text-right">{{ row.order_count }}</td>
-              <td class="px-3 py-2 text-right text-blue-600">{{ formatNum(row.sales_amount) }}</td>
+              <td class="px-3 py-2 text-right text-green-600">{{ formatNum(row.sales_amount) }}</td>
               <td class="px-3 py-2 text-right text-red-400">{{ formatNum(row.refund_amount) }}</td>
               <td class="px-3 py-2 text-right font-medium text-green-600">{{ formatNum(row.net_income) }}</td>
             </tr>
@@ -117,20 +131,21 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth'
 
-use([CanvasRenderer, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 const auth = useAuthStore()
 
 // 状态
 const dailyData = ref([])
+const accountData = ref([])
 const storeFilter = ref('')
-const platformFilter = ref(['douyin', 'kuaishou', 'shipinhao'])
+const activePlatformTab = ref('all')
 const rangeStart = ref('')
 const rangeEnd = ref('')
 const activeRange = ref('')
@@ -138,7 +153,9 @@ const customStart = ref('')
 const customEnd = ref('')
 
 const PLATFORM_LABELS = { douyin: '抖音', kuaishou: '快手', shipinhao: '视频号', taobao: '淘宝', youzan: '有赞', other: '其他' }
-const platformTabs = [
+
+const platformTabOptions = [
+  { key: 'all', label: '全部平台' },
   { key: 'douyin', label: '抖音' },
   { key: 'kuaishou', label: '快手' },
   { key: 'shipinhao', label: '视频号' },
@@ -168,12 +185,6 @@ function setDateRange(key) {
   loadData()
 }
 
-function togglePlatformFilter(key) {
-  const idx = platformFilter.value.indexOf(key)
-  if (idx >= 0) platformFilter.value.splice(idx, 1)
-  else platformFilter.value.push(key)
-}
-
 function applyCustomRange() {
   if (!customStart.value || !customEnd.value) return
   rangeStart.value = customStart.value
@@ -190,11 +201,19 @@ const rangeLabel = computed(() => {
 // 数据
 const storeList = computed(() => [...new Set(dailyData.value.map(d => d.store_name))])
 
+// 获取平台对应的key（从店铺名前缀推断或直接从数据取）
+const platformForStore = (storeName) => {
+  const found = dailyData.value.find(d => d.store_name === storeName && d.ecommerce_platform)
+  return found?.ecommerce_platform || 'other'
+}
+
 const filteredData = computed(() => {
   let data = dailyData.value
-  if (platformFilter.value.length) {
-    data = data.filter(d => platformFilter.value.includes(d.ecommerce_platform))
+  // 平台筛选
+  if (activePlatformTab.value !== 'all') {
+    data = data.filter(d => d.ecommerce_platform === activePlatformTab.value)
   }
+  // 店铺筛选
   if (storeFilter.value) {
     data = data.filter(d => d.store_name === storeFilter.value)
   }
@@ -212,21 +231,32 @@ const summary = computed(() => {
     sales: d.reduce((s, r) => s + Number(r.sales_amount || 0), 0),
     refund: d.reduce((s, r) => s + Number(r.refund_amount || 0), 0),
     net: d.reduce((s, r) => s + Number(r.net_income || 0), 0),
-    pending: 0, // 后续填充
   }
 })
 
-const platformData = computed(() => {
+// 待结算资金分店铺
+const pendingByStore = computed(() => {
+  let accounts = accountData.value || []
+
+  // 平台筛选：从账户的平台字段过滤
+  if (activePlatformTab.value !== 'all') {
+    accounts = accounts.filter(a => a.ecommerce_platform === activePlatformTab.value)
+  }
+
+  // 构建 storeName: balance 列表
   const map = {}
-  filteredData.value.forEach(d => {
-    const key = d.ecommerce_platform || 'other'
-    if (!map[key]) map[key] = 0
-    map[key] += Number(d.sales_amount || 0)
+  accounts.forEach(a => {
+    const name = a.store_name || a.name || a.account_name || '未知'
+    map[name] = (map[name] || 0) + Number(a.balance || 0)
   })
-  return Object.entries(map).map(([name, value]) => ({
-    name: PLATFORM_LABELS[name] || name,
-    value: Math.round(value * 100) / 100,
-  })).filter(d => d.value > 0).sort((a, b) => b.value - a.value)
+
+  return Object.entries(map)
+    .map(([name, balance]) => ({ name, balance }))
+    .sort((a, b) => b.balance - a.balance)
+})
+
+const totalPending = computed(() => {
+  return pendingByStore.value.reduce((s, item) => s + item.balance, 0)
 })
 
 // ECharts options
@@ -259,19 +289,6 @@ const trendOption = computed(() => {
   }
 })
 
-const pieOption = computed(() => {
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
-    legend: { bottom: 0, textStyle: { fontSize: 11 } },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      label: { formatter: '{b}\n{d}%', fontSize: 11 },
-      data: platformData.value,
-    }],
-  }
-})
-
 // 工具
 function formatNum(n) {
   return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -292,13 +309,13 @@ async function loadData() {
     .order('order_date', { ascending: false })
   dailyData.value = data || []
 
-  // 加载待结算资金
+  // 加载待结算资金（分店铺）
   const { data: accData } = await supabase
     .from('accounts')
-    .select('balance')
+    .select('balance, store_name, name, account_name, ecommerce_platform')
     .not('ecommerce_platform', 'is', null)
     .eq('status', 'active')
-  summary.value.pending = (accData || []).reduce((s, a) => s + Number(a.balance || 0), 0)
+  accountData.value = accData || []
 }
 
 onMounted(() => {
