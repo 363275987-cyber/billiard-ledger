@@ -248,7 +248,7 @@
           <h2 class="font-bold text-gray-800">🔄 新建转账</h2>
           <button @click="showTransferModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
         </div>
-        <form @submit.prevent="handleTransfer" class="p-6 space-y-4">
+        <form @submit.prevent="handleTransfer" class="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">转出账户 <span class="text-red-400">*</span></label>
             <SearchableSelect
