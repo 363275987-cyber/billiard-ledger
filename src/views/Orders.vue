@@ -376,9 +376,8 @@
               <template v-if="order.platform_type">
                 <span class="px-1.5 py-0.5 rounded text-xs" :class="ecomPlatformTagClass(order.platform_type)">{{ platformTypeName(order.platform_type) }}</span>
               </template>
-              <span v-else class="text-gray-300 text-xs">—</span>
-              <div v-if="order.external_order_no" class="text-[10px] text-gray-400 font-mono mt-0.5 max-w-[100px] truncate" :title="order.external_order_no">{{ order.external_order_no }}</div>
-              <div v-if="order.sku_code" class="text-[10px] text-purple-400 font-mono">SKU: {{ order.sku_code }}</div>
+              <div v-if="order.sku_code" class="text-[10px] text-purple-400 font-mono mt-0.5">SKU: {{ order.sku_code }}</div>
+              <span v-if="!order.platform_type" class="text-gray-300 text-xs">—</span>
             </td>
             <td class="px-3 py-3 text-center">
               <span
