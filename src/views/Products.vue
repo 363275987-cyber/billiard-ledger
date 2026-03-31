@@ -4,8 +4,9 @@
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-xl font-bold text-gray-800">📦 产品库</h1>
       <div class="flex gap-2">
-        <button @click="showExportModal = true" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition cursor-pointer">📤 导出</button>
-        <button v-if="canEdit" @click="showImportModal = true" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition cursor-pointer">📥 导入</button>
+        <button @click="exportType='single'; showExportModal=true" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition cursor-pointer">🎱 导出单品+赠品</button>
+        <button @click="exportType='bundle'; showExportModal=true" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition cursor-pointer">📦 导出套装+赠品</button>
+        <button v-if="canEdit" @click="showImportModal=true" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">📥 导入</button>
         <button v-if="canEdit" @click="openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">+ 添加产品</button>
       </div>
     </div>
@@ -355,8 +356,8 @@
     <!-- ============ 导出弹窗 ============ -->
     <div v-if="showExportModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showExportModal=false">
       <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-        <h2 class="font-bold text-lg text-gray-800 mb-1">📤 导出产品</h2>
-        <p class="text-xs text-gray-400 mb-4">选择要导出的数据列，导出当前{{ activeTab==='single'?'单品':'套装' }}Tab的产品</p>
+        <h2 class="font-bold text-lg text-gray-800 mb-1">{{ exportType==='bundle' ? '📦 导出套装+赠品' : '🎱 导出单品+赠品' }}</h2>
+        <p class="text-xs text-gray-400 mb-4">选择要导出的数据列{{ exportType==='bundle' ? '，套装会包含子商品明细' : '，单品会包含关联赠品' }}</p>
         <div class="grid grid-cols-2 gap-2 mb-4">
           <label v-for="col in exportColumns" :key="col.key" class="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-50">
             <input type="checkbox" v-model="col.checked" class="rounded text-blue-600" />
@@ -795,21 +796,24 @@ async function onGiftConfirmed({ gifts, saveAsDefault }) {
 
 const showExportModal = ref(false)
 const showImportModal = ref(false)
+const exportType = ref('single') // single | bundle
 const exportColumns = ref([
   { key: 'sku_code', label: 'SKU编码', checked: true },
   { key: 'name', label: '产品名称', checked: true },
-  { key: 'product_type', label: '产品类型', checked: true },
+  { key: 'product_type', label: '产品类型', checked: false },
   { key: 'category', label: '分类', checked: true },
   { key: 'brand', label: '品牌', checked: true },
   { key: 'cost_price', label: '成本价', checked: true },
   { key: 'retail_price', label: '零售价', checked: true },
   { key: 'stock', label: '库存', checked: true },
+  { key: 'gifts', label: '赠品', checked: true },
 ])
 
 // ========== 导出逻辑 ==========
 async function doExport() {
   try {
-    const pType = activeTab.value === 'bundle' ? 'bundle' : 'single'
+    const isBundle = exportType.value === 'bundle'
+    const pType = isBundle ? 'bundle' : 'single'
     const { data: products } = await supabase.from('products').select('id, name, product_type, category, brand, cost_price, retail_price').eq('status', 'active').eq('product_type', pType).order('name')
     if (!products?.length) { toast('没有可导出的产品', 'warning'); return }
 
@@ -819,32 +823,111 @@ async function doExport() {
     ;(skus || []).forEach(s => { if (!skuByPid[s.product_id]) skuByPid[s.product_id] = []; skuByPid[s.product_id].push(s) })
 
     const selectedCols = exportColumns.value.filter(c => c.checked)
-    const rows = []
-    for (const p of products) {
-      const pSkus = skuByPid[p.id] || []
-      const buildRow = (sku) => {
-        const row = {}
-        selectedCols.forEach(c => {
-          if (c.key === 'sku_code') row['SKU编码'] = sku?.sku_code || ''
-          else if (c.key === 'cost_price') row['成本价'] = sku?.cost_price ?? p.cost_price ?? ''
-          else if (c.key === 'retail_price') row['零售价'] = sku?.retail_price ?? p.retail_price ?? ''
-          else if (c.key === 'stock') row['库存'] = sku?.stock ?? 0
-          else if (c.key === 'product_type') row['产品类型'] = p[c.key] === 'bundle' ? '套装' : '单品'
-          else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
-          else row[c.label] = p[c.key] ?? ''
+    const colKeys = new Set(selectedCols.map(c => c.key))
+
+    if (isBundle) {
+      // 套装导出：套装行 + 子商品行
+      const { data: bundleItems } = await supabase.from('bundle_items').select('id, bundle_id, sku_id, quantity, sort_order').in('bundle_id', pids)
+      const { data: childSkus } = await supabase.from('product_skus').select('id, sku_code, cost_price, retail_price')
+      const childSkuMap = {}
+      ;(childSkus || []).forEach(s => { childSkuMap[s.id] = s })
+      const itemsByBundle = {}
+      ;(bundleItems || []).forEach(item => { if (!itemsByBundle[item.bundle_id]) itemsByBundle[item.bundle_id] = []; itemsByBundle[item.bundle_id].push(item) })
+
+      const rows = []
+      for (const p of products) {
+        const pSkus = skuByPid[p.id] || []
+        const pSku = pSkus[0]
+        const items = (itemsByBundle[p.id] || []).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+        // Bundle header row
+        rows.push({
+          '套装SKU编码': pSku?.sku_code || '',
+          '套装名称': p.name,
+          '成本价': pSku?.cost_price ?? p.cost_price ?? '',
+          '零售价': pSku?.retail_price ?? p.retail_price ?? '',
+          '库存': pSku?.stock ?? 0,
+          '子商品SKU编码': '',
+          '子商品名称': '',
+          '数量': '',
+          '子商品成本价': '',
+          '子商品零售价': '',
         })
-        return row
+        // Child item rows
+        for (const item of items) {
+          const child = childSkuMap[item.sku_id]
+          rows.push({
+            '套装SKU编码': pSku?.sku_code || '',
+            '套装名称': p.name,
+            '成本价': '',
+            '零售价': '',
+            '库存': '',
+            '子商品SKU编码': child?.sku_code || '',
+            '子商品名称': child ? `#${item.sku_id?.slice(0,6)}` : '',
+            '数量': item.quantity,
+            '子商品成本价': child?.cost_price ?? '',
+            '子商品零售价': child?.retail_price ?? '',
+          })
+        }
       }
-      if (pSkus.length === 0) rows.push(buildRow(null))
-      else pSkus.forEach(s => rows.push(buildRow(s)))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 10 }, { wch: 10 }]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '套装')
+      XLSX.writeFile(wb, `套装+赠品_${new Date().toISOString().slice(0,10)}.xlsx`)
+    } else {
+      // 单品导出：带赠品信息
+      // 先获取赠品数据
+      const { data: giftBundles } = await supabase.from('product_bundles').select('id, product_id, gift_name').in('product_id', pids)
+      const { data: giftItems } = giftBundles?.length ? await supabase.from('product_bundle_items').select('id, bundle_id, gift_name, quantity').in('bundle_id', giftBundles.map(g => g.id)) : []
+      const giftsByPid = {}
+      ;(giftBundles || []).forEach(gb => {
+        const items = (giftItems || []).filter(gi => gi.bundle_id === gb.id)
+        giftsByPid[gb.product_id] = giftsByPid[gb.product_id] || []
+        giftsByPid[gb.product_id].push(...items)
+      })
+
+      const rows = []
+      for (const p of products) {
+        const pSkus = skuByPid[p.id] || []
+        const gifts = giftsByPid[p.id] || []
+        const giftNames = gifts.map(g => `${g.gift_name || '赠品'}×${g.quantity || 1}`).join(', ')
+
+        if (pSkus.length === 0) {
+          const row = {}
+          selectedCols.forEach(c => {
+            if (c.key === 'sku_code') row['SKU编码'] = ''
+            else if (c.key === 'stock') row['库存'] = ''
+            else if (c.key === 'product_type') row['产品类型'] = '单品'
+            else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
+            else if (c.key === 'gifts') row['赠品'] = giftNames
+            else row[c.label] = p[c.key] ?? ''
+          })
+          rows.push(row)
+        } else {
+          for (const sku of pSkus) {
+            const row = {}
+            selectedCols.forEach(c => {
+              if (c.key === 'sku_code') row['SKU编码'] = sku.sku_code || ''
+              else if (c.key === 'cost_price') row['成本价'] = sku.cost_price ?? p.cost_price ?? ''
+              else if (c.key === 'retail_price') row['零售价'] = sku.retail_price ?? p.retail_price ?? ''
+              else if (c.key === 'stock') row['库存'] = sku.stock ?? 0
+              else if (c.key === 'product_type') row['产品类型'] = '单品'
+              else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
+              else if (c.key === 'gifts') row['赠品'] = giftNames
+              else row[c.label] = p[c.key] ?? ''
+            })
+            rows.push(row)
+          }
+        }
+      }
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '单品')
+      XLSX.writeFile(wb, `单品+赠品_${new Date().toISOString().slice(0,10)}.xlsx`)
     }
 
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, pType === 'bundle' ? '套装' : '单品')
-    XLSX.writeFile(wb, `产品库_${pType === 'bundle' ? '套装' : '单品'}_${new Date().toISOString().slice(0,10)}.xlsx`)
     showExportModal.value = false
-    toast(`已导出 ${rows.length} 条记录`, 'success')
+    toast('导出成功', 'success')
   } catch (e) {
     toast('导出失败: ' + e.message, 'error')
   }
