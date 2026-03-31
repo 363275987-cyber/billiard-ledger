@@ -363,9 +363,12 @@
             <td class="px-4 py-3 text-right font-medium text-green-600 whitespace-nowrap">
               {{ formatMoney(order.amount) }}
             </td>
-            <td class="px-4 py-3 text-gray-500 text-xs">{{ order.sales_profile?.name || order.sales_name || '—' }}</td>
+            <td class="px-4 py-3 text-gray-500 text-xs">
+              {{ order.sales_profile?.name || order.sales_name || '—' }}
+              <span v-if="order.order_source === 'shared' && order.shared_sales_name" class="text-amber-600"> + {{ order.shared_sales_name }}</span>
+            </td>
             <td class="px-4 py-3 text-center">
-              <span :class="order.order_source === 'sales_guided' ? 'text-blue-600' : order.order_source === 'organic' ? 'text-gray-400' : 'text-purple-600'" 
+              <span :class="order.order_source === 'shared' ? 'text-amber-600 bg-amber-50' : order.order_source === 'sales_guided' ? 'text-blue-600' : order.order_source === 'organic' ? 'text-gray-400' : 'text-purple-600'"
                 class="text-xs px-1.5 py-0.5 rounded">
                 {{ ORDER_SOURCE_LABELS[order.order_source] || '—' }}
               </span>
@@ -707,10 +710,35 @@
               <option value="sales_guided">🤝 销售引导（微信沟通→下单）</option>
               <option value="organic">🛒 有机流量（客户自己下的）</option>
               <option value="cs_service">🎧 客服处理（电商客服）</option>
+              <option value="shared">👫 平分单（两个销售共同服务）</option>
             </select>
             <p class="text-xs text-gray-400 mt-1">
-              销售引导 = 业绩归销售；有机流量 = 不归销售；客服处理 = 客服低提成
+              销售引导 = 业绩归销售；有机流量 = 不归销售；客服处理 = 客服低提成；平分单 = 业绩两人各50%
             </p>
+          </div>
+
+          <!-- 平分单：选择第二个销售 -->
+          <div v-if="form.order_source === 'shared'" class="p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <label class="block text-sm font-medium text-amber-800 mb-1">👫 平分单 — 第二销售员</label>
+            <div class="relative">
+              <input
+                v-model="form.sharedSalesSearch"
+                @focus="sharedSalesDropdown = true"
+                @input="sharedSalesDropdown = true"
+                @blur="sharedSalesDropdown = false"
+                placeholder="搜索销售员姓名"
+                class="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+              />
+              <div v-if="sharedSalesDropdown && filteredSharedSales.length > 0"
+                class="absolute z-30 w-full mt-1 bg-white border border-amber-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                <div v-for="s in filteredSharedSales" :key="s.id"
+                  @mousedown.prevent="selectSharedSales(s)"
+                  class="px-3 py-2 text-sm hover:bg-amber-50 cursor-pointer">
+                  {{ s.name }} <span class="text-xs text-gray-400">{{ s.role === 'admin' ? '(管理员)' : s.role === 'manager' ? '(经理)' : '' }}</span>
+                </div>
+              </div>
+              <div v-if="form.shared_sales_id" class="text-xs text-green-600 mt-1">已选：{{ sharedSalesName }}</div>
+            </div>
           </div>
 
           <!-- 备注 -->
@@ -1045,6 +1073,37 @@ function filterAccountsBySearch(kw) {
   )
 }
 
+// --- 平分单：第二个销售搜索 ---
+const sharedSalesDropdown = ref(false)
+const allSalesProfiles = ref([])
+const sharedSalesName = computed(() => {
+  if (!form.shared_sales_id) return ''
+  const s = allSalesProfiles.value.find(p => p.id === form.shared_sales_id)
+  return s ? s.name : ''
+})
+const filteredSharedSales = computed(() => {
+  const kw = (form.sharedSalesSearch || '').trim().toLowerCase()
+  if (!kw) return allSalesProfiles.value
+  return allSalesProfiles.value.filter(s =>
+    s.name.toLowerCase().includes(kw)
+  )
+})
+async function loadSalesProfiles() {
+  if (allSalesProfiles.value.length > 0) return
+  const { data } = await supabase.from('profiles').select('id, name, role').in('role', ['sales', 'cs', 'finance', 'admin', 'manager']).order('name')
+  allSalesProfiles.value = data || []
+}
+function selectSharedSales(s) {
+  form.shared_sales_id = s.id
+  form.sharedSalesSearch = s.name
+  sharedSalesDropdown.value = false
+}
+// 监听 order_source 变化，加载销售列表
+watch(() => form.order_source, (val) => {
+  if (val === 'shared') loadSalesProfiles()
+  else { form.shared_sales_id = null; form.sharedSalesSearch = '' }
+})
+
 async function quickCreateAccount() {
   const name = quickAccountForm.short_name.trim()
   if (!name) { toast('请输入账户简称', 'warning'); return }
@@ -1249,7 +1308,7 @@ async function handleExportOrders() {
     const safeKeyword = (filters.keyword || '').replace(/[,%().*]/g, '')
     let query = supabase
       .from('orders')
-      .select('id, order_no, customer_name, product_name, amount, status, created_at, order_source, service_number_code, note, product_category, sales_profile:sales_id(name)')
+      .select('id, order_no, customer_name, product_name, amount, status, created_at, order_source, service_number_code, note, product_category, sales_profile:sales_id(name), shared_sales_profile:shared_sales_id(name)')
       .order('created_at', { ascending: false })
       .limit(5000)
 
@@ -1648,6 +1707,8 @@ const defaultForm = () => ({
   note: '',
   status: 'completed',
   order_source: 'sales_guided',
+  shared_sales_id: null,
+  sharedSalesSearch: '',
   productItems: [{ name: '', qty: 1, unit_cost: 0, sale_price: 0, product_id: null, is_gift: false }],
 })
 
@@ -1969,6 +2030,9 @@ function openModal(order = null) {
   snDropdownOpen.value = false
   form.accountSearch = ''
   accountDropdownOpen.value = false
+  form.shared_sales_id = null
+  form.sharedSalesSearch = ''
+  sharedSalesDropdown.value = false
 }
 async function autoFillCustomer() {
   const phone = form.customer_phone?.trim()
@@ -2046,6 +2110,8 @@ async function handleSubmit() {
       product_category: form.product_category,
       product_name: form.product_name,
       amount: form.amount,
+      order_source: form.order_source,
+      shared_sales_id: form.order_source === 'shared' ? form.shared_sales_id : null,
       note: form.note,
     }
 

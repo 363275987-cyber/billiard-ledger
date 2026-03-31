@@ -99,6 +99,7 @@ export const ORDER_SOURCE = {
   sales_guided: '销售引导',
   organic: '有机流量',
   cs_service: '客服处理',
+  shared: '平分单',
 }
 
 export const REFUND_STATUS = {

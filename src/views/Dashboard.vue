@@ -603,12 +603,13 @@ async function loadAnomalies() {
 async function loadSalesDashboard(uid) {
   const { start, end } = getMonthRange()
 
-  const [incRes, countRes, recentRes] = await Promise.all([
-    // 我的本月收入
+  const [incRes, countRes, recentRes, sharedRes] = await Promise.all([
+    // 我的本月收入（非平分单）
     supabase
       .from('orders')
       .select('amount')
       .eq('status', 'completed')
+      .neq('order_source', 'shared')
       .or(`sales_id.eq.${uid},creator_id.eq.${uid}`)
       .gte('created_at', start)
       .lt('created_at', end),
@@ -617,19 +618,30 @@ async function loadSalesDashboard(uid) {
       .from('orders')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'completed')
-      .or(`sales_id.eq.${uid},creator_id.eq.${uid}`)
+      .or(`sales_id.eq.${uid},creator_id.eq.${uid},shared_sales_id.eq.${uid}`)
       .gte('created_at', start)
       .lt('created_at', end),
     // 最新订单
     supabase
       .from('orders')
       .select('id, amount, customer_name, product_category, created_at, customer, account_code')
-      .or(`sales_id.eq.${uid},creator_id.eq.${uid}`)
+      .or(`sales_id.eq.${uid},creator_id.eq.${uid},shared_sales_id.eq.${uid}`)
       .order('created_at', { ascending: false })
       .limit(5),
+    // 平分单收入（金额按50%计）
+    supabase
+      .from('orders')
+      .select('amount')
+      .eq('status', 'completed')
+      .eq('order_source', 'shared')
+      .or(`sales_id.eq.${uid},shared_sales_id.eq.${uid}`)
+      .gte('created_at', start)
+      .lt('created_at', end),
   ])
 
-  stats.value.totalIncome = incRes.data?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? null
+  const normalIncome = incRes.data?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0
+  const sharedIncome = (sharedRes.data?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0) / 2
+  stats.value.totalIncome = normalIncome + sharedIncome || null
   stats.value.myOrderCount = countRes.count ?? 0
   recentOrders.value = recentRes.data || []
 }
