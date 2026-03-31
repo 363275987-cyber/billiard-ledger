@@ -79,7 +79,7 @@
             <th class="px-4 py-3 text-left font-medium">客户</th>
             <th class="px-4 py-3 text-right font-medium">退款金额</th>
             <th class="px-4 py-3 text-left font-medium">退款原因</th>
-            <th class="px-4 py-3 text-left font-medium">退款账户</th>
+            <th class="px-4 py-3 text-left font-medium">付款账户</th>
             <th class="px-4 py-3 text-center font-medium">状态</th>
             <th class="px-4 py-3 text-left font-medium">时间</th>
           </tr>
@@ -127,12 +127,12 @@
 
     <!-- New Refund Modal -->
     <div v-if="showRefundModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showRefundModal = false">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="font-bold text-gray-800">💳 登记退款</h2>
           <button @click="showRefundModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
         </div>
-        <form @submit.prevent="handleRefund" class="p-6 space-y-4">
+        <form @submit.prevent="handleRefund" class="p-6 space-y-4 overflow-y-auto flex-1">
           <!-- Order selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">关联订单 <span class="text-red-400">*</span></label>
@@ -147,7 +147,7 @@
               <button type="button" v-if="form.order_id" @click="clearOrderSelection" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 cursor-pointer">&times;</button>
               <!-- 下拉列表 -->
               <div v-if="showOrderDropdown"
-                class="absolute z-50 bottom-full mb-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                class="absolute z-50 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
                 <div
                   v-for="o in filteredOrders"
                   :key="o.id"
@@ -206,9 +206,9 @@
             <input v-if="form.reason === '其他'" v-model="form.custom_reason" placeholder="请填写具体原因" required
               class="w-full mt-2 px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
           </div>
-          <!-- 退款账户（从哪个账户退出去的） -->
+          <!-- 付款账户（从哪个账户退款给客户） -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">退款账户 <span class="text-red-400">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">付款账户 <span class="text-red-400">*</span></label>
             <div class="relative">
               <input
                 v-model="accountSearch"
@@ -219,7 +219,7 @@
               />
               <button type="button" v-if="form.refund_from_account_id" @click="clearAccountSelection" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 cursor-pointer">&times;</button>
               <div v-if="showAccountDropdown"
-                class="absolute z-50 bottom-full mb-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                class="absolute z-50 mt-1 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                 <template v-for="(accs, ip) in filteredAccountGroups" :key="ip">
                   <div class="px-2 py-1 bg-gray-50 text-xs font-medium text-gray-400 sticky top-0">{{ ip }}</div>
                   <div
@@ -227,7 +227,8 @@
                     @mousedown.prevent="selectAccount(acc)"
                     class="px-3 py-2 hover:bg-orange-50 cursor-pointer text-sm border-b border-gray-50 last:border-0"
                   >
-                    {{ acc.code }}
+                    {{ acc.code }}{{ acc.short_name ? ` (${acc.short_name})` : '' }}
+                    <span v-if="acc.balance != null" class="ml-2 text-xs text-gray-400">¥{{ Number(acc.balance).toFixed(0) }}</span>
                   </div>
                 </template>
                 <div v-if="Object.keys(filteredAccountGroups).length === 0" class="text-center py-4 text-gray-400 text-sm">没有匹配的账户</div>
@@ -286,7 +287,7 @@ async function generateTestData(count) {
     // 需要先有已完成的订单才能创建退款
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, order_no, customer_name, product_name, amount, account_code')
+      .select('id, order_no, customer_name, product_name, amount, account_code, account_id')
       .in('status', ['completed', 'partially_refunded'])
       .limit(500)
     if (!orders || !orders.length) { toast('没有可退款的已完成订单', 'warning'); return }
@@ -403,6 +404,15 @@ function selectOrder(o) {
   orderSearch.value = `${o.customer_name} - ${o.product_name} (¥${o.amount})`
   showOrderDropdown.value = false
 
+  // 自动设置付款账户为该订单的收款账户
+  if (o.account_id && !form.refund_from_account_id) {
+    form.refund_from_account_id = o.account_id
+    const acc = accounts.value.find(a => a.id === o.account_id)
+    if (acc) {
+      accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
+    }
+  }
+
   // 加载订单产品明细
   loadOrderProducts(o.id)
 }
@@ -429,7 +439,7 @@ async function loadOrderProducts(orderId) {
 // 选中退款账户
 function selectAccount(acc) {
   form.refund_from_account_id = acc.id
-  accountSearch.value = acc.code
+  accountSearch.value = acc.code + (acc.short_name ? ` (${acc.short_name})` : '')
   showAccountDropdown.value = false
 }
 
@@ -485,14 +495,14 @@ async function loadRefunds() {
     // 订单下拉（已完成和部分退款的）
     const { data: orderData } = await supabase
       .from('orders')
-      .select('id, order_no, customer_name, product_name, amount, account_code')
+      .select('id, order_no, customer_name, product_name, amount, account_code, account_id')
       .in('status', ['completed', 'partially_refunded'])
       .order('created_at', { ascending: false })
       .limit(500)
     completedOrders.value = orderData || []
 
     // 账户下拉（按退款使用频率排序）
-    const { data: accData } = await supabase.from('accounts').select('id, code, ip_code').eq('status', 'active')
+    const { data: accData } = await supabase.from('accounts').select('id, code, short_name, ip_code, balance').eq('status', 'active')
     const allAccs = accData || []
     // 统计退款使用频率
     const { data: refundAccs } = await supabase.from('refunds').select('refund_from_account_id')
@@ -543,7 +553,7 @@ async function handleRefund() {
   if (selectedOrder.value && form.refund_amount > selectedOrder.value.amount) {
     toast('退款金额不能超过订单金额', 'warning'); return
   }
-  if (!form.refund_from_account_id) { toast('请选择退款账户', 'warning'); return }
+  if (!form.refund_from_account_id) { toast('请选择付款账户', 'warning'); return }
 
   submitting.value = true
   try {

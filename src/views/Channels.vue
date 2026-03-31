@@ -95,12 +95,12 @@
 
     <!-- Assign Modal -->
     <div v-if="showAssignModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showAssignModal = false">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 max-h-[85vh] flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h2 class="font-bold text-gray-800">新建客服号分配</h2>
           <button @click="showAssignModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
         </div>
-        <form @submit.prevent="handleAssign" class="p-6 space-y-4">
+        <form @submit.prevent="handleAssign" class="p-6 space-y-4"
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">选择客服号（微信/支付宝）</label>
             <select v-model="assignForm.account_id" required
@@ -133,7 +133,7 @@
             <textarea v-model="assignForm.note" rows="2" placeholder="可选，如：该客服号当前由XX负责"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
           </div>
-          <div class="flex gap-3 pt-2">
+          <div class="flex gap-3 pt-2 >
             <button type="button" @click="showAssignModal = false" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">取消</button>
             <button type="submit" :disabled="submitting" class="flex-1 py-2.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 cursor-pointer">
               {{ submitting ? '提交中...' : '确认分配' }}

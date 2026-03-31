@@ -227,8 +227,8 @@
 
         <!-- Adjustment Modal -->
         <div v-if="showAdjustModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showAdjustModal = false">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 shrink-0">
               <h2 class="font-bold text-gray-800">调整期初余额</h2>
               <p class="text-xs text-red-500 mt-1">⚠️ 仅老板权限，调整后不可撤回，会记录调整原因</p>
             </div>
@@ -315,7 +315,7 @@
           </div>
 
           <!-- Modal Footer -->
-          <div class="flex justify-end gap-3 p-5 border-t border-gray-100">
+          <div class="flex justify-end gap-3 p-5 border-t border-gray-100 shrink-0">
             <button @click="closeSettleModal"
               class="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
               关闭
