@@ -126,7 +126,7 @@
                   <div v-if="order._accDropdown && filterAccountsBySearch(order._accountSearch).length > 0"
                     class="absolute z-30 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto min-w-[160px]">
                     <div v-for="acc in filterAccountsBySearch(order._accountSearch).slice(0, 20)" :key="acc.id"
-                      @mousedown.prevent="order.account_id = acc.id; order._accountSearch = ''"
+                      @mousedown.prevent="selectRowAccount(order, acc)"
                       class="px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap">
                       {{ acc.short_name || acc.code }}（¥{{ Number(acc.balance || 0).toFixed(0) }}）
                     </div>
@@ -1027,7 +1027,7 @@ const selectedAccountDisplay = computed(() => {
 })
 function selectAccount(acc) {
   form.account_id = acc.id
-  form.accountSearch = ''
+  form.accountSearch = acc.short_name || acc.code
   accountDropdownOpen.value = false
 }
 function getAccountLabel(accountId) {
@@ -1521,7 +1521,7 @@ const selectedSnDisplay = computed(() => {
 
 function selectSn(sn) {
   form.service_number = sn.code
-  snSearch.value = ''
+  snSearch.value = sn.display || sn.code
   snDropdownOpen.value = false
 }
 
@@ -1989,6 +1989,11 @@ async function autoFillCustomer() {
 }
 
 // 列表模式下某行的自动填充
+function selectRowAccount(order, acc) {
+  order.account_id = acc.id
+  order._accountSearch = acc.short_name || acc.code
+}
+
 async function autoFillRowCustomer(order) {
   const phone = order.customer_phone?.trim()
   if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return
