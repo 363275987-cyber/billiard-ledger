@@ -7,7 +7,8 @@
         <button @click="exportType='single'; showExportModal=true" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition cursor-pointer">🎱 导出单品+赠品</button>
         <button @click="exportType='bundle'; showExportModal=true" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition cursor-pointer">📦 导出套装+赠品</button>
         <button v-if="canEdit" @click="showImportModal=true" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">📥 导入</button>
-        <button v-if="canEdit" @click="openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">+ 添加产品</button>
+        <button v-if="canEdit" @click="openProductModal('single')" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">+ 单品</button>
+        <button v-if="canEdit" @click="openProductModal('bundle')" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition cursor-pointer">+ 套装</button>
       </div>
     </div>
 
@@ -153,74 +154,136 @@
       </div>
     </div>
 
-    <!-- ============ 弹窗：新建/编辑产品(SPU) ============ -->
+    <!-- ============ 弹窗：新建/编辑产品 ============ -->
     <div v-if="showProductModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showProductModal = false">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-          <h2 class="font-bold text-gray-800">{{ editingProduct ? '编辑产品' : '添加产品' }}</h2>
+          <h2 class="font-bold text-gray-800">
+            <span v-if="editingProduct">编辑{{ pform.product_type === 'bundle' ? '套装' : '产品' }}</span>
+            <span v-else>添加{{ pform.product_type === 'bundle' ? '套装' : '单品' }}</span>
+          </h2>
           <button @click="showProductModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
         </div>
         <form @submit.prevent="handleSaveProduct" class="p-5 space-y-3 overflow-y-auto flex-1">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">产品名称 <span class="text-red-400">*</span></label>
-            <input v-model="pform.name" required placeholder="如：国熙-霜华-小头杆" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
+          <!-- 单品模式 -->
+          <template v-if="pform.product_type !== 'bundle'">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">产品类型</label>
-              <select v-model="pform.product_type" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
-                <option value="single">单品</option>
-                <option value="course">课程</option>
-                <option value="bundle">套装</option>
-                <option value="gift_bag">福袋</option>
-              </select>
+              <label class="block text-sm font-medium text-gray-700 mb-1">产品名称 <span class="text-red-400">*</span></label>
+              <input v-model="pform.name" required placeholder="如：国熙-霜华-小头杆" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">分类</label>
-              <select v-model="pform.category" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
-                <option value="">请选择</option>
-                <option v-for="(label, key) in PRODUCT_ITEM_CATEGORIES" :key="key" :value="key">{{ label }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">品牌</label>
-              <input v-model="pform.brand" placeholder="如：国熙" list="brand-list" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-              <datalist id="brand-list"><option v-for="b in brands" :key="b" :value="b" /></datalist>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                <select v-model="pform.category" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+                  <option value="">请选择</option>
+                  <option v-for="(label, key) in PRODUCT_ITEM_CATEGORIES" :key="key" :value="key">{{ label }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">品牌</label>
+                <input v-model="pform.brand" placeholder="如：国熙" list="brand-list" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                <datalist id="brand-list"><option v-for="b in brands" :key="b" :value="b" /></datalist>
+              </div>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">子分类</label>
-              <input v-model="pform.sub_category" placeholder="如：小头杆" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="block text-sm font-medium text-gray-700 mb-1">SKU编码 <span class="text-red-400">*</span></label>
+              <input v-model="pform.sku_code" required placeholder="如：DAA001" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                :class="skuCodeDuplicate ? 'border-red-400 bg-red-50' : 'border-gray-200'" @blur="checkSkuDuplicate" @input="skuCodeDuplicate=false" />
+              <p v-if="skuCodeDuplicate" class="text-xs text-red-500 mt-0.5">⚠️ 该SKU编码已存在</p>
             </div>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div v-if="canSeeCost">
-              <label class="block text-sm font-medium text-gray-700 mb-1">成本价</label>
-              <input v-model.number="pform.cost_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            <div class="grid grid-cols-2 gap-3">
+              <div v-if="canSeeCost">
+                <label class="block text-sm font-medium text-gray-700 mb-1">成本价</label>
+                <input v-model.number="pform.cost_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">零售价</label>
+                <input v-model.number="pform.retail_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">库存</label>
+                <input v-model.number="pform.stock" type="number" placeholder="0" min="0" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">子分类</label>
+                <input v-model="pform.sub_category" placeholder="如：小头杆" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <!-- 赠品区域 -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium text-gray-700">🎁 赠品（随产品赠送）</label>
+                <button type="button" @click="addGiftRow" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">+ 添加赠品</button>
+              </div>
+              <div v-if="pform.gifts.length === 0" class="text-xs text-gray-400 text-center py-2 border border-dashed border-gray-200 rounded-lg">暂无赠品</div>
+              <div v-for="(gift, gi) in pform.gifts" :key="gi" class="flex gap-2 items-center mb-1.5">
+                <input v-model="gift.name" placeholder="赠品名称" class="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
+                <input v-model.number="gift.quantity" type="number" placeholder="数量" min="1" class="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
+                <button type="button" @click="pform.gifts.splice(gi, 1)" class="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 套装模式 -->
+          <template v-else>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">套装名称 <span class="text-red-400">*</span></label>
+              <input v-model="pform.name" required placeholder="如：破晓风暴套装" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">零售价</label>
-              <input v-model.number="pform.retail_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="block text-sm font-medium text-gray-700 mb-1">套装SKU编码 <span class="text-red-400">*</span></label>
+              <input v-model="pform.sku_code" required placeholder="如：TA001" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                :class="skuCodeDuplicate ? 'border-red-400 bg-red-50' : 'border-gray-200'" @blur="checkSkuDuplicate" @input="skuCodeDuplicate=false" />
+              <p v-if="skuCodeDuplicate" class="text-xs text-red-500 mt-0.5">⚠️ 该SKU编码已存在</p>
             </div>
-          </div>
-          <div class="grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div v-if="canSeeCost">
+                <label class="block text-sm font-medium text-gray-700 mb-1">成本价</label>
+                <input v-model.number="pform.cost_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">零售价</label>
+                <input v-model.number="pform.retail_price" type="number" placeholder="0" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">SPU编码</label>
-              <input v-model="pform.spu_code" placeholder="自动生成" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <label class="block text-sm font-medium text-gray-700 mb-1">库存</label>
+              <input v-model.number="pform.stock" type="number" placeholder="0" min="0" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
+            <!-- 子商品列表 -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">单位</label>
-              <input v-model="pform.unit" placeholder="个" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium text-gray-700">📋 包含子商品</label>
+                <button type="button" @click="addBundleItemRow" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">+ 添加子商品</button>
+              </div>
+              <div v-if="pform.bundle_items.length === 0" class="text-xs text-gray-400 text-center py-2 border border-dashed border-gray-200 rounded-lg">请添加子商品</div>
+              <div v-for="(item, bi) in pform.bundle_items" :key="bi" class="flex gap-2 items-center mb-1.5">
+                <input v-model="item.sku_code" placeholder="子商品SKU编码" class="w-28 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none font-mono" @blur="resolveBundleItemName(item)" />
+                <input v-model="item.name" placeholder="商品名" class="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" readonly />
+                <input v-model.number="item.quantity" type="number" placeholder="×" min="1" class="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none text-center" />
+                <button type="button" @click="pform.bundle_items.splice(bi, 1)" class="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+              </div>
             </div>
+            <!-- 赠品区域 -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">图片(Emoji)</label>
-              <input v-model="pform.image" placeholder="🎱" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-medium text-gray-700">🎁 赠品（随套装赠送）</label>
+                <button type="button" @click="addGiftRow" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">+ 添加赠品</button>
+              </div>
+              <div v-if="pform.gifts.length === 0" class="text-xs text-gray-400 text-center py-2 border border-dashed border-gray-200 rounded-lg">暂无赠品</div>
+              <div v-for="(gift, gi) in pform.gifts" :key="gi" class="flex gap-2 items-center mb-1.5">
+                <input v-model="gift.name" placeholder="赠品名称" class="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
+                <input v-model.number="gift.quantity" type="number" placeholder="数量" min="1" class="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
+                <button type="button" @click="pform.gifts.splice(gi, 1)" class="text-red-400 hover:text-red-600 cursor-pointer">✕</button>
+              </div>
             </div>
-          </div>
+          </template>
+
           <div class="flex gap-3 pt-2">
             <button type="button" @click="showProductModal = false" class="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">取消</button>
-            <button type="submit" :disabled="saving" class="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 cursor-pointer">{{ saving ? '...' : (editingProduct ? '保存' : '添加') }}</button>
+            <button type="submit" :disabled="saving || skuCodeDuplicate" class="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 cursor-pointer">{{ saving ? '...' : (editingProduct ? '保存' : '添加') }}</button>
           </div>
         </form>
       </div>
@@ -607,27 +670,132 @@ function toggleExpand(pid) {
 // ========== 产品(SPU) CRUD ==========
 const showProductModal = ref(false)
 const editingProduct = ref(null)
-const pform = reactive({ name: '', product_type: 'single', category: '', brand: '', sub_category: '', cost_price: 0, retail_price: null, spu_code: '', unit: '个', image: '', status: 'active' })
+const skuCodeDuplicate = ref(false)
+const pform = reactive({ name: '', product_type: 'single', category: '', brand: '', sub_category: '', cost_price: 0, retail_price: null, sku_code: '', stock: 0, unit: '个', image: '', status: 'active', gifts: [], bundle_items: [] })
 
-function openProductModal(p = null) {
-  editingProduct.value = p
-  if (p) {
-    Object.assign(pform, { name: p.name, product_type: p.product_type || 'single', category: p.category || '', brand: p.brand || '', sub_category: p.sub_category || '', cost_price: p.cost_price ?? 0, retail_price: p.retail_price ?? null, spu_code: p.spu_code || '', unit: p.unit || '个', image: p.image || '', status: p.status || 'active' })
-  } else {
-    Object.assign(pform, { name: '', product_type: 'single', category: '', brand: '', sub_category: '', cost_price: 0, retail_price: null, spu_code: '', unit: '个', image: '', status: 'active' })
+function openProductModal(typeOrProduct) {
+  if (typeof typeOrProduct === 'string') {
+    // New product mode
+    editingProduct.value = null
+    const type = typeOrProduct
+    Object.assign(pform, { name: '', product_type: type, category: '', brand: '', sub_category: '', cost_price: 0, retail_price: null, sku_code: '', stock: 0, unit: '个', image: '', status: 'active', gifts: [], bundle_items: [] })
+  } else if (typeOrProduct) {
+    // Edit existing product
+    const p = typeOrProduct
+    editingProduct.value = p
+    Object.assign(pform, { name: p.name, product_type: p.product_type || 'single', category: p.category || '', brand: p.brand || '', sub_category: p.sub_category || '', cost_price: p.cost_price ?? 0, retail_price: p.retail_price ?? null, sku_code: '', stock: 0, unit: p.unit || '个', image: p.image || '', status: p.status || 'active', gifts: [], bundle_items: [] })
+    // Load existing SKU code
+    const existingSkus = skusMap[p.id] || []
+    if (existingSkus.length > 0) {
+      pform.sku_code = existingSkus[0].sku_code || ''
+      pform.stock = existingSkus[0].stock ?? 0
+      if (existingSkus[0].cost_price) pform.cost_price = existingSkus[0].cost_price
+      if (existingSkus[0].retail_price) pform.retail_price = existingSkus[0].retail_price
+    }
+    // Load existing gifts
+    loadExistingGifts(p.id)
+    // Load existing bundle items if bundle
+    if (p.product_type === 'bundle') {
+      const items = bundleItemsMap[p.id] || []
+      pform.bundle_items = items.map(item => ({
+        sku_code: item.product_skus?.sku_code || '',
+        name: item.product_skus?.products?.name || '',
+        quantity: item.quantity,
+        sku_id: item.sku_id,
+      }))
+    }
   }
+  skuCodeDuplicate.value = false
   showProductModal.value = true
 }
 
+async function checkSkuDuplicate() {
+  if (!pform.sku_code) return
+  const { data } = await supabase.from('product_skus').select('id, sku_code, product_id').eq('sku_code', pform.sku_code.trim())
+  const existing = (data || []).find(s => s.product_id !== editingProduct.value?.id)
+  skuCodeDuplicate.value = !!existing
+}
+
+async function resolveBundleItemName(item) {
+  if (!item.sku_code) { item.name = ''; return }
+  const { data } = await supabase.from('product_skus').select('id, sku_code, product_id, products:product_id(name)').eq('sku_code', item.sku_code.trim())
+  if (data?.[0]) {
+    item.name = data[0].products?.name || ''
+    item.sku_id = data[0].id
+  } else {
+    item.name = '未找到'
+    item.sku_id = null
+  }
+}
+
+async function loadExistingGifts(productId) {
+  try {
+    const bundle = await productStore.fetchBundleForProduct(productId)
+    if (bundle?.gifts?.length > 0) {
+      pform.gifts = bundle.gifts.map(g => ({ name: g.gift_name || g.name, quantity: g.quantity || 1 }))
+    }
+  } catch (e) {}
+}
+
+function addGiftRow() {
+  pform.gifts.push({ name: '', quantity: 1 })
+}
+
+function addBundleItemRow() {
+  pform.bundle_items.push({ sku_code: '', name: '', quantity: 1, sku_id: null })
+}
+
 async function handleSaveProduct() {
+  if (skuCodeDuplicate.value) { toast('SKU编码重复，请修改', 'error'); return }
   saving.value = true
   try {
-    const payload = { name: pform.name, product_type: pform.product_type || 'single', category: pform.category || null, brand: pform.brand || null, sub_category: pform.sub_category || '', cost_price: pform.cost_price || 0, retail_price: pform.retail_price || null, spu_code: pform.spu_code || null, unit: pform.unit || '个', image: pform.image || '', status: pform.status }
     if (editingProduct.value) {
-      await productStore.updateProduct(editingProduct.value.id, payload)
+      // Update
+      const prodUpdates = { name: pform.name, category: pform.category || null, brand: pform.brand || null, sub_category: pform.sub_category || '', cost_price: pform.cost_price || 0, retail_price: pform.retail_price || null, unit: pform.unit || '个', image: pform.image || '', status: pform.status }
+      await productStore.updateProduct(editingProduct.value.id, prodUpdates)
+      // Update SKU
+      const existingSkus = skusMap[editingProduct.value.id] || []
+      const skuUpdates = { sku_code: pform.sku_code.trim(), cost_price: pform.cost_price || 0, retail_price: pform.retail_price || null, stock: pform.stock ?? 0 }
+      if (existingSkus.length > 0) {
+        await supabase.from('product_skus').update(skuUpdates).eq('id', existingSkus[0].id)
+      } else {
+        await supabase.from('product_skus').insert({ product_id: editingProduct.value.id, ...skuUpdates })
+      }
+      // Save gifts
+      if (pform.gifts.length > 0) {
+        const giftsData = pform.gifts.filter(g => g.name).map(g => ({ gift_name: g.name, quantity: g.quantity || 1 }))
+        await productStore.saveBundle(editingProduct.value.id, giftsData, null, authStore.user?.id)
+      } else {
+        // Clear existing gifts
+        try { await productStore.saveBundle(editingProduct.value.id, [], null, authStore.user?.id) } catch(e) {}
+      }
+      // Save bundle items
+      if (pform.product_type === 'bundle') {
+        await supabase.from('bundle_items').delete().eq('bundle_id', editingProduct.value.id)
+        const validItems = pform.bundle_items.filter(i => i.sku_id)
+        if (validItems.length) {
+          await supabase.from('bundle_items').insert(validItems.map((item, i) => ({ bundle_id: editingProduct.value.id, sku_id: item.sku_id, quantity: item.quantity, sort_order: i })))
+        }
+      }
       toast('已更新', 'success')
     } else {
-      await productStore.createProduct(payload)
+      // Create
+      const payload = { name: pform.name, product_type: pform.product_type || 'single', category: pform.category || null, brand: pform.brand || null, sub_category: pform.sub_category || '', cost_price: pform.cost_price || 0, retail_price: pform.retail_price || null, unit: pform.unit || '个', image: pform.image || '', status: 'active' }
+      const product = await productStore.createProduct(payload)
+      // Create SKU
+      await supabase.from('product_skus').insert({ product_id: product.id, sku_code: pform.sku_code.trim(), cost_price: pform.cost_price || 0, retail_price: pform.retail_price || null, stock: pform.stock ?? 0 })
+      // Save gifts
+      if (pform.gifts.length > 0) {
+        const giftsData = pform.gifts.filter(g => g.name).map(g => ({ gift_name: g.name, quantity: g.quantity || 1 }))
+        await productStore.saveBundle(product.id, giftsData, null, authStore.user?.id)
+      }
+      // Save bundle items
+      if (pform.product_type === 'bundle') {
+        const validItems = pform.bundle_items.filter(i => i.sku_id)
+        if (validItems.length) {
+          await supabase.from('bundle_items').insert(validItems.map((item, i) => ({ bundle_id: product.id, sku_id: item.sku_id, quantity: item.quantity, sort_order: i })))
+        }
+      }
       toast('已添加', 'success')
     }
     showProductModal.value = false
