@@ -127,12 +127,12 @@
 
     <!-- New Refund Modal -->
     <div v-if="showRefundModal" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50" @click.self="showRefundModal = false">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col overflow-y-auto">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10 shrink-0">
           <h2 class="font-bold text-gray-800">💳 登记退款</h2>
           <button @click="showRefundModal = false" class="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">&times;</button>
         </div>
-        <form @submit.prevent="handleRefund" class="p-6 space-y-4 overflow-y-auto flex-1">
+        <form @submit.prevent="handleRefund" class="p-6 space-y-4 flex-1">
           <!-- Order selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">关联订单 <span class="text-red-400">*</span></label>
