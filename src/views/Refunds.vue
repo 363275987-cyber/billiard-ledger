@@ -609,14 +609,15 @@ async function handleApproveRefund(r) {
     await loadRefunds()
     calculateStats()
 
-    // 操作日志
+    // 操作日志（从数据库查真实余额，不手算）
     try {
+      const accAfter = r.refund_from_account_id ? await getAccountBalance(r.refund_from_account_id) : null
       const oldBal = Number(accBefore?.balance ?? 0)
-      const newBal = oldBal - Number(r.refund_amount)
+      const newBal = Number(accAfter?.balance ?? oldBal)
       logOperation({
         action: 'approve_refund',
         module: '退款',
-        description: `审批退款 ${formatMoneyStr(r.refund_amount)}，原因：${r.reason || ''}${accBefore ? `，账户：${accBefore.name}` : ''}，余额 ${oldBal.toFixed(2)} - ${Number(r.refund_amount).toFixed(2)} → ${newBal.toFixed(2)}`,
+        description: `审批退款 ${formatMoneyStr(r.refund_amount)}，原因：${r.reason || ''}${accBefore ? `，账户：${accBefore.name}` : ''}，余额 ${oldBal.toFixed(2)} → ${newBal.toFixed(2)}`,
         detail: { refund_id: r.id, refund_amount: r.refund_amount, reason: r.reason, order_status: data?.order_status },
         amount: -Math.abs(Number(r.refund_amount)),
         accountId: r.refund_from_account_id,
