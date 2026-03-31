@@ -296,21 +296,6 @@ async function generateTestData(count) {
           note: '测试数据',
         })
       if (error) { console.warn('退款插入失败:', error.message); continue }
-      // 操作日志
-      try {
-        const { logOperation, getAccountBalance } = await import('../utils/operationLogger')
-        const accInfo = await getAccountBalance(acc.id)
-        const accName = accInfo?.name || acc.code || ''
-        logOperation({
-          action: 'create_refund',
-          module: '退款',
-          description: `[测试] 创建退款，金额 ${Number(amt).toFixed(2)}，订单：${order.order_no || ''}，账户：${accName}`,
-          detail: { refund_amount: amt, order_no: order.order_no, account_id: acc.id, account_name: accName },
-          amount: amt,
-          accountId: acc.id,
-          accountName: accName,
-        })
-      } catch (_) {}
       success++
     }
     await loadRefunds()
@@ -573,20 +558,6 @@ async function handleRefund() {
 
     showRefundModal.value = false
     calculateStats()
-
-    // 操作日志
-    try {
-      const acc = await getAccountBalance(form.refund_from_account_id)
-      logOperation({
-        action: 'refund',
-        module: '退款',
-        description: `登记退款 ${formatMoneyStr(form.refund_amount)}，原因：${payload.reason || ''}${acc ? `，退款账户：${acc.name}` : ''}`,
-        detail: { refund_id: data.id, refund_amount: form.refund_amount, reason: payload.reason, order_id: form.order_id },
-        amount: -Math.abs(Number(form.refund_amount)),
-        accountId: form.refund_from_account_id,
-        accountName: acc?.name || null,
-      })
-    } catch (_) {}
 
     toast('退款已登记', 'success')
   } catch (e) {
