@@ -3,7 +3,11 @@
     <!-- 顶部标题 -->
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-xl font-bold text-gray-800">📦 产品库</h1>
-      <button v-if="canEdit" @click="openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">+ 添加产品</button>
+      <div class="flex gap-2">
+        <button @click="showExportModal = true" class="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition cursor-pointer">📤 导出</button>
+        <button v-if="canEdit" @click="showImportModal = true" class="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition cursor-pointer">📥 导入</button>
+        <button v-if="canEdit" @click="openProductModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition cursor-pointer">+ 添加产品</button>
+      </div>
     </div>
 
     <!-- 统计卡片 -->
@@ -347,6 +351,107 @@
 
     <!-- ============ 赠品选择弹窗（复用现有组件） ============ -->
     <GiftSelector v-if="showGiftModal" :mainProductId="giftTarget.productId" :mainProductName="giftTarget.name" :mainCostPrice="Number(giftTarget.costPrice) || 0" :existingGifts="giftTarget.existingGifts || []" @confirm="onGiftConfirmed" @close="showGiftModal = false" />
+
+    <!-- ============ 导出弹窗 ============ -->
+    <div v-if="showExportModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showExportModal=false">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <h2 class="font-bold text-lg text-gray-800 mb-1">📤 导出产品</h2>
+        <p class="text-xs text-gray-400 mb-4">选择要导出的数据列，导出当前{{ activeTab==='single'?'单品':'套装' }}Tab的产品</p>
+        <div class="grid grid-cols-2 gap-2 mb-4">
+          <label v-for="col in exportColumns" :key="col.key" class="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-50">
+            <input type="checkbox" v-model="col.checked" class="rounded text-blue-600" />
+            <span>{{ col.label }}</span>
+          </label>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button @click="showExportModal=false" class="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer">取消</button>
+          <button @click="doExport" class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer">下载 Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 导入弹窗 ============ -->
+    <div v-if="showImportModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showImportModal=false">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+        <h2 class="font-bold text-lg text-gray-800 mb-1">📥 导入产品</h2>
+        <p class="text-xs text-gray-400 mb-3">上传 Excel 文件，按 SKU 编码匹配：已有则更新，没有则新建</p>
+
+        <!-- 步骤1：上传文件 -->
+        <div v-if="importStep===1" class="space-y-3">
+          <div class="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-blue-400 transition cursor-pointer" @click="$refs.importFile.click()">
+            <div class="text-3xl mb-2">📄</div>
+            <div class="text-sm text-gray-500">点击或拖拽 Excel 文件到此处</div>
+            <div class="text-xs text-gray-400 mt-1">支持 .xlsx / .xls</div>
+            <input ref="importFile" type="file" accept=".xlsx,.xls" class="hidden" @change="onImportFileSelected" />
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="downloadTemplate" class="text-xs text-blue-600 hover:text-blue-800 cursor-pointer underline">📥 下载导入模板</button>
+          </div>
+          <div v-if="importFile" class="text-sm bg-blue-50 rounded-lg p-3 flex items-center justify-between">
+            <span>📄 {{ importFile.name }}</span>
+            <button @click="importFile=null" class="text-red-400 text-xs cursor-pointer">✕ 移除</button>
+          </div>
+          <button v-if="importFile" @click="parseImportFile" :disabled="importParsing" class="w-full py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer disabled:opacity-50">
+            {{ importParsing ? '解析中...' : '下一步：预览数据' }}
+          </button>
+        </div>
+
+        <!-- 步骤2：预览确认 -->
+        <div v-if="importStep===2" class="space-y-3">
+          <div class="text-sm text-gray-600">
+            共解析 <b>{{ importPreview.length }}</b> 条记录
+            <span class="text-green-600 ml-2">新增 {{ importNewCount }}</span>
+            <span class="text-blue-600 ml-2">更新 {{ importUpdateCount }}</span>
+          </div>
+          <div class="max-h-60 overflow-y-auto border border-gray-100 rounded-lg">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                  <th class="px-2 py-1.5 text-left">状态</th>
+                  <th class="px-2 py-1.5 text-left">SKU编码</th>
+                  <th class="px-2 py-1.5 text-left">产品名称</th>
+                  <th class="px-2 py-1.5 text-left">分类</th>
+                  <th class="px-2 py-1.5 text-right">成本价</th>
+                  <th class="px-2 py-1.5 text-right">零售价</th>
+                  <th class="px-2 py-1.5 text-right">库存</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in importPreview.slice(0, 100)" :key="i" class="border-t border-gray-50">
+                  <td class="px-2 py-1">
+                    <span v-if="row._isNew" class="text-green-600 bg-green-50 px-1 rounded">新增</span>
+                    <span v-else class="text-blue-600 bg-blue-50 px-1 rounded">更新</span>
+                  </td>
+                  <td class="px-2 py-1 font-mono">{{ row['SKU编码'] }}</td>
+                  <td class="px-2 py-1">{{ row['产品名称'] }}</td>
+                  <td class="px-2 py-1">{{ row['分类'] }}</td>
+                  <td class="px-2 py-1 text-right">{{ row['成本价'] ?? '' }}</td>
+                  <td class="px-2 py-1 text-right">{{ row['零售价'] ?? '' }}</td>
+                  <td class="px-2 py-1 text-right">{{ row['库存'] ?? '' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="importPreview.length > 100" class="text-xs text-gray-400 text-center py-2">...还有 {{ importPreview.length - 100 }} 条</div>
+          </div>
+          <div class="flex gap-2">
+            <button @click="importStep=1" class="flex-1 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">上一步</button>
+            <button @click="doImport" :disabled="importSaving" class="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer disabled:opacity-50">
+              {{ importSaving ? '导入中...' : `确认导入 ${importPreview.length} 条` }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 步骤3：完成 -->
+        <div v-if="importStep===3" class="text-center py-6">
+          <div class="text-4xl mb-3">✅</div>
+          <div class="text-lg font-bold text-gray-800">导入完成</div>
+          <div class="text-sm text-gray-500 mt-1">
+            新增 {{ importResult.created }} 条，更新 {{ importResult.updated }} 条
+          </div>
+          <button @click="closeImport" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer">完成</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -358,6 +463,7 @@ import { usePermission } from '../composables/usePermission'
 import { useProductStore } from '../stores/products'
 import { formatMoney, PRODUCT_ITEM_CATEGORIES, toast } from '../lib/utils'
 import GiftSelector from '../components/GiftSelector.vue'
+import * as XLSX from 'xlsx'
 
 const authStore = useAuthStore()
 const productStore = useProductStore()
@@ -655,6 +761,214 @@ async function onGiftConfirmed({ gifts, saveAsDefault }) {
     toast('赠品已保存', 'success')
     showGiftModal.value = false
   } catch (e) { toast('保存失败: ' + e.message, 'error') }
+}
+
+// ========== 导入导出 ==========
+
+const showExportModal = ref(false)
+const showImportModal = ref(false)
+const exportColumns = ref([
+  { key: 'sku_code', label: 'SKU编码', checked: true },
+  { key: 'name', label: '产品名称', checked: true },
+  { key: 'product_type', label: '产品类型', checked: true },
+  { key: 'category', label: '分类', checked: true },
+  { key: 'brand', label: '品牌', checked: true },
+  { key: 'cost_price', label: '成本价', checked: true },
+  { key: 'retail_price', label: '零售价', checked: true },
+  { key: 'stock', label: '库存', checked: true },
+])
+
+// ========== 导出逻辑 ==========
+async function doExport() {
+  try {
+    // 获取当前 tab 的所有产品 + SKU
+    const pType = activeTab.value === 'bundle' ? 'bundle' : 'single'
+    const { data: products } = await supabase.from('products').select('id, name, product_type, category, brand, cost_price, retail_price').eq('status', 'active').eq('product_type', pType).order('name')
+    if (!products?.length) { toast('没有可导出的产品', 'warning'); return }
+
+    const pids = products.map(p => p.id)
+    const { data: skus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock').in('product_id', pids).order('sku_code')
+    const skuByPid = {}
+    ;(skus || []).forEach(s => { if (!skuByPid[s.product_id]) skuByPid[s.product_id] = []; skuByPid[s.product_id].push(s) })
+
+    const selectedCols = exportColumns.value.filter(c => c.checked)
+    const rows = []
+    for (const p of products) {
+      const pSkus = skuByPid[p.id] || []
+      if (pSkus.length === 0) {
+        const row = {}
+        selectedCols.forEach(c => {
+          if (c.key === 'sku_code') row['SKU编码'] = ''
+          else if (c.key === 'stock') row['库存'] = ''
+          else if (c.key === 'product_type') row['产品类型'] = p[c.key] === 'bundle' ? '套装' : '单品'
+          else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
+          else row[c.label] = p[c.key] ?? ''
+        })
+        rows.push(row)
+      } else {
+        for (const sku of pSkus) {
+          const row = {}
+          selectedCols.forEach(c => {
+            if (c.key === 'sku_code') row['SKU编码'] = sku.sku_code || ''
+            else if (c.key === 'cost_price') row['成本价'] = sku.cost_price ?? p.cost_price ?? ''
+            else if (c.key === 'retail_price') row['零售价'] = sku.retail_price ?? p.retail_price ?? ''
+            else if (c.key === 'stock') row['库存'] = sku.stock ?? 0
+            else if (c.key === 'product_type') row['产品类型'] = p[c.key] === 'bundle' ? '套装' : '单品'
+            else if (c.key === 'category') row['分类'] = PRODUCT_ITEM_CATEGORIES[p[c.key]] || p[c.key] || ''
+            else row[c.label] = p[c.key] ?? ''
+          })
+          rows.push(row)
+        }
+      }
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, pType === 'bundle' ? '套装' : '单品')
+    XLSX.writeFile(wb, `产品库_${pType === 'bundle' ? '套装' : '单品'}_${new Date().toISOString().slice(0,10)}.xlsx`)
+    showExportModal.value = false
+    toast(`已导出 ${rows.length} 条记录`, 'success')
+  } catch (e) {
+    toast('导出失败: ' + e.message, 'error')
+  }
+}
+
+// ========== 导入逻辑 ==========
+const importStep = ref(1) // 1=上传 2=预览 3=完成
+const importFile = ref(null)
+const importParsing = ref(false)
+const importSaving = ref(false)
+const importPreview = ref([])
+const importResult = ref({ created: 0, updated: 0 })
+
+const importNewCount = computed(() => importPreview.value.filter(r => r._isNew).length)
+const importUpdateCount = computed(() => importPreview.value.filter(r => !r._isNew).length)
+
+function downloadTemplate() {
+  const template = [
+    { 'SKU编码': 'DAA001', '产品名称': '示例球杆', '分类': '球杆', '品牌': 'DBA', '成本价': 334, '零售价': 1555, '库存': 50 },
+    { 'SKU编码': 'DAB001', '产品名称': '示例杆桶', '分类': '包装', '品牌': 'DBA', '成本价': 90, '零售价': 425, '库存': 30 },
+  ]
+  const ws = XLSX.utils.json_to_sheet(template)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '导入模板')
+  // Set column widths
+  ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 6 }]
+  XLSX.writeFile(wb, '产品导入模板.xlsx')
+}
+
+function onImportFileSelected(e) {
+  const file = e.target.files?.[0]
+  if (file) importFile.value = file
+}
+
+async function parseImportFile() {
+  if (!importFile.value) return
+  importParsing.value = true
+  try {
+    const buf = await importFile.value.arrayBuffer()
+    const wb = XLSX.read(buf)
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const rows = XLSX.utils.sheet_to_json(ws)
+
+    if (!rows.length) { toast('文件中没有数据', 'warning'); return }
+
+    // Get existing SKU codes for matching
+    const { data: existingSkus } = await supabase.from('product_skus').select('id, sku_code, product_id, cost_price, retail_price, stock, products:product_id(id, name, product_type, category, brand)')
+    const skuMap = {}
+    ;(existingSkus || []).forEach(s => { skuMap[s.sku_code] = s })
+
+    const preview = rows.map(row => {
+      const code = String(row['SKU编码'] || '').trim()
+      const existing = skuMap[code]
+      return {
+        'SKU编码': code,
+        '产品名称': row['产品名称'] || '',
+        '分类': row['分类'] || '',
+        '品牌': row['品牌'] || '',
+        '成本价': row['成本价'] != null ? Number(row['成本价']) : null,
+        '零售价': row['零售价'] != null ? Number(row['零售价']) : null,
+        '库存': row['库存'] != null ? Number(row['库存']) : null,
+        '_isNew': !existing,
+        '_existingSku': existing,
+      }
+    }).filter(r => r['SKU编码'])
+
+    importPreview.value = preview
+    importStep.value = 2
+  } catch (e) {
+    toast('解析失败: ' + e.message, 'error')
+  } finally {
+    importParsing.value = false
+  }
+}
+
+async function doImport() {
+  importSaving.value = true
+  let created = 0, updated = 0
+  try {
+    for (const row of importPreview.value) {
+      if (row._isNew) {
+        // Create new product + SKU
+        const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0] || null
+        const { data: product, error: pe } = await supabase.from('products').insert({
+          name: row['产品名称'],
+          category: catKey || row['分类'],
+          brand: row['品牌'],
+          cost_price: row['成本价'],
+          retail_price: row['零售价'],
+          product_type: 'single',
+          status: 'active',
+        }).select().single()
+        if (pe) { console.error('创建产品失败:', row['SKU编码'], pe.message); continue }
+        // Create SKU
+        const { error: se } = await supabase.from('product_skus').insert({
+          product_id: product.id,
+          sku_code: row['SKU编码'],
+          cost_price: row['成本价'],
+          retail_price: row['零售价'],
+          stock: row['库存'] ?? 0,
+        })
+        if (se) console.error('创建SKU失败:', row['SKU编码'], se.message)
+        else created++
+      } else {
+        // Update existing SKU
+        const updates = {}
+        if (row['成本价'] != null) updates.cost_price = row['成本价']
+        if (row['零售价'] != null) updates.retail_price = row['零售价']
+        if (row['库存'] != null) updates.stock = row['库存']
+        // Also update product name/brand/category
+        const prodUpdates = {}
+        if (row['产品名称']) prodUpdates.name = row['产品名称']
+        if (row['品牌']) prodUpdates.brand = row['品牌']
+        const catKey = Object.entries(PRODUCT_ITEM_CATEGORIES).find(([k, v]) => v === row['分类'])?.[0]
+        if (catKey) prodUpdates.category = catKey
+        if (Object.keys(updates).length) {
+          await supabase.from('product_skus').update(updates).eq('id', row._existingSku.id)
+        }
+        if (Object.keys(prodUpdates).length) {
+          await supabase.from('products').update(prodUpdates).eq('id', row._existingSku.product_id)
+        }
+        updated++
+      }
+    }
+    importResult.value = { created, updated }
+    importStep.value = 3
+  } catch (e) {
+    toast('导入失败: ' + e.message, 'error')
+  } finally {
+    importSaving.value = false
+  }
+}
+
+function closeImport() {
+  showImportModal.value = false
+  importStep.value = 1
+  importFile.value = null
+  importPreview.value = []
+  importResult.value = { created: 0, updated: 0 }
+  loadProducts()
+  loadSummary()
 }
 
 // ========== 初始化 ==========
