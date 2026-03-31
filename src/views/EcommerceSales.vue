@@ -38,19 +38,21 @@
     </div>
 
     <!-- 汇总卡片 -->
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <div class="grid grid-cols-3 gap-3">
       <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div class="text-xs text-gray-500 mb-1">销售额</div>
-        <div class="text-lg font-bold text-green-600">¥{{ formatNum(summary.sales) }}</div>
-        <div class="text-xs text-gray-400">{{ summary.orders }} 单</div>
+        <div class="text-xs text-gray-500 mb-1.5">💰 销售额</div>
+        <div class="text-xl font-bold text-green-600">¥{{ formatNum(summary.sales) }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">{{ summary.orders }} 单</div>
       </div>
       <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div class="text-xs text-gray-500 mb-1">退款</div>
-        <div class="text-lg font-bold text-red-500">¥{{ formatNum(summary.refund) }}</div>
+        <div class="text-xs text-gray-500 mb-1.5">↩️ 退款</div>
+        <div class="text-xl font-bold text-red-500">¥{{ formatNum(summary.refund) }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">&nbsp;</div>
       </div>
       <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div class="text-xs text-gray-500 mb-1">净营业额</div>
-        <div class="text-lg font-bold text-green-600">¥{{ formatNum(summary.net) }}</div>
+        <div class="text-xs text-gray-500 mb-1.5">📈 净营业额</div>
+        <div class="text-xl font-bold text-blue-600">¥{{ formatNum(summary.net) }}</div>
+        <div class="text-xs text-gray-400 mt-0.5">&nbsp;</div>
       </div>
     </div>
 
