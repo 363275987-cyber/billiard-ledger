@@ -11,6 +11,10 @@
             : 'px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 cursor-pointer'">
           {{ opt.label }}
         </button>
+        <span class="mx-1 text-gray-300">|</span>
+        <input type="date" v-model="customStart" @change="applyCustomRange" class="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
+        <span class="text-gray-400">~</span>
+        <input type="date" v-model="customEnd" @change="applyCustomRange" class="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
         <button v-if="activeRange" @click="activeRange = ''; rangeStart = ''; rangeEnd = ''; loadData()" class="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:bg-gray-100 cursor-pointer">✕</button>
         <span class="text-xs text-gray-400 ml-1">{{ rangeLabel }}</span>
       </div>
@@ -130,6 +134,8 @@ const platformFilter = ref(['douyin', 'kuaishou', 'shipinhao'])
 const rangeStart = ref('')
 const rangeEnd = ref('')
 const activeRange = ref('')
+const customStart = ref('')
+const customEnd = ref('')
 
 const PLATFORM_LABELS = { douyin: '抖音', kuaishou: '快手', shipinhao: '视频号', taobao: '淘宝', youzan: '有赞', other: '其他' }
 const platformTabs = [
@@ -166,6 +172,14 @@ function togglePlatformFilter(key) {
   const idx = platformFilter.value.indexOf(key)
   if (idx >= 0) platformFilter.value.splice(idx, 1)
   else platformFilter.value.push(key)
+}
+
+function applyCustomRange() {
+  if (!customStart.value || !customEnd.value) return
+  rangeStart.value = customStart.value
+  rangeEnd.value = customEnd.value
+  activeRange.value = 'custom'
+  loadData()
 }
 
 const rangeLabel = computed(() => {
