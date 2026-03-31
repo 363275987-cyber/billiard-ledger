@@ -289,21 +289,21 @@ const menuGroups = computed(() => {
   })
 
   // 📊 数据报表 — 看数据
-  const reportItems = [
-    { label: '财务报表', path: '/reports' },
-    { label: '业绩统计', path: '/performance' },
-    { label: '提成管理', path: '/commission' },
-    { label: '产品销量', path: '/product-sales' },
-    { label: '平台收入', path: '/platforms' },
-  ]
-  if (auth.isFinance) {
-    reportItems.push({ label: '法定报表', path: '/legal-reports' })
-  }
   groups.push({
     icon: '📊',
     label: '数据报表',
-    items: reportItems,
+    items: [
+      { label: '电商销量', path: '/ecommerce-sales' },
+      { label: '财务报表', path: '/reports' },
+      { label: '业绩统计', path: '/performance' },
+      { label: '提成管理', path: '/commission' },
+      { label: '产品销量', path: '/product-sales' },
+      { label: '平台收入', path: '/platforms' },
+    ],
   })
+  if (auth.isFinance) {
+    groups[groups.length - 1].items.push({ label: '法定报表', path: '/legal-reports' })
+  }
 
   // 🔌 平台对接 — 外部系统
   groups.push({

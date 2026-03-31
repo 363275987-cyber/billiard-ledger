@@ -27,7 +27,7 @@
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-3 gap-4 mb-5">
+    <div class="grid grid-cols-4 gap-4 mb-5">
       <div class="bg-white rounded-xl border border-gray-100 p-4">
         <div class="text-xs text-gray-400 mb-1">📂 账户总数</div>
         <div class="text-2xl font-bold text-gray-800">{{ stats.total }}</div>
@@ -39,6 +39,10 @@
       <div class="bg-white rounded-xl border border-gray-100 p-4">
         <div class="text-xs text-gray-400 mb-1">💰 总余额</div>
         <div class="text-2xl font-bold" :class="stats.totalBalance >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(stats.totalBalance) }}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 p-4">
+        <div class="text-xs text-orange-400 mb-1">🛒 待结算资金（电商）</div>
+        <div class="text-2xl font-bold text-orange-600">{{ formatMoney(ecommercePendingBalance) }}</div>
       </div>
     </div>
 
@@ -75,7 +79,6 @@
         class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">全部分类</option>
-        <option value="ecommerce">🛒 电商账户</option>
         <option value="company">🏢 企业账户</option>
         <option value="personal">👤 个人账户</option>
       </select>
@@ -557,6 +560,8 @@ const allAccounts = computed(() => accountStore.accounts)
 
 const filteredAccounts = computed(() => {
   return allAccounts.value.filter(acc => {
+    // 排除电商账户
+    if (acc.ecommerce_platform) return false
     // Tab 过滤
     if (activeTab.value === 'active' && acc.status !== 'active') return false
     if (activeTab.value === 'frozen' && acc.status !== 'frozen') return false
@@ -574,12 +579,19 @@ const filteredAccounts = computed(() => {
 })
 
 const stats = computed(() => {
-  const all = allAccounts.value
+  const all = allAccounts.value.filter(a => !a.ecommerce_platform)
   return {
     total: all.length,
     active: all.filter(a => a.status === 'active').length,
     totalBalance: all.reduce((sum, a) => sum + (Number(a.balance) || 0), 0),
   }
+})
+
+// 电商账户待结算资金（余额合计）
+const ecommercePendingBalance = computed(() => {
+  return allAccounts.value
+    .filter(a => a.ecommerce_platform)
+    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
 })
 
 // --- Methods ---

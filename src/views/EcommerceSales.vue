@@ -1,0 +1,295 @@
+<template>
+  <div class="p-4 md:p-6 space-y-6">
+    <!-- 顶部标题 + 筛选 -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <h1 class="text-xl font-bold text-gray-800">📊 电商销量</h1>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button v-for="opt in dateOptions" :key="opt.key"
+          @click="setDateRange(opt.key)"
+          :class="activeRange === opt.key
+            ? 'px-3 py-1.5 rounded-lg text-sm font-medium bg-blue-600 text-white cursor-pointer'
+            : 'px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 cursor-pointer'">
+          {{ opt.label }}
+        </button>
+        <button v-if="activeRange" @click="activeRange = ''; rangeStart = ''; rangeEnd = ''; loadData()" class="px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:bg-gray-100 cursor-pointer">✕</button>
+        <span class="text-xs text-gray-400 ml-1">{{ rangeLabel }}</span>
+      </div>
+    </div>
+
+    <!-- 汇总卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div class="text-xs text-gray-500 mb-1">销售额</div>
+        <div class="text-lg font-bold text-blue-600">¥{{ formatNum(summary.sales) }}</div>
+        <div class="text-xs text-gray-400">{{ summary.orders }} 单</div>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div class="text-xs text-gray-500 mb-1">退款</div>
+        <div class="text-lg font-bold text-red-500">¥{{ formatNum(summary.refund) }}</div>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div class="text-xs text-gray-500 mb-1">净营业额</div>
+        <div class="text-lg font-bold text-green-600">¥{{ formatNum(summary.net) }}</div>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div class="text-xs text-gray-500 mb-1">待结算资金</div>
+        <div class="text-lg font-bold text-purple-600">¥{{ formatNum(summary.pending) }}</div>
+      </div>
+    </div>
+
+    <!-- 图表区 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- 日趋势图 -->
+      <div class="lg:col-span-2 bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium text-gray-700">日趋势</h3>
+          <div class="flex gap-1">
+            <button v-for="pt in platformTabs" :key="pt.key"
+              @click="togglePlatformFilter(pt.key)"
+              :class="platformFilter.includes(pt.key) ? 'text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 cursor-pointer' : 'text-xs px-2 py-1 rounded-full text-gray-400 hover:bg-gray-100 cursor-pointer'">
+              {{ pt.label }}
+            </button>
+          </div>
+        </div>
+        <div v-if="dailyData.length" style="height: 300px">
+          <v-chart :option="trendOption" autoresize />
+        </div>
+        <div v-else class="text-center text-gray-400 py-16 text-sm">暂无数据</div>
+      </div>
+
+      <!-- 平台分布 -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+        <h3 class="text-sm font-medium text-gray-700 mb-3">平台分布</h3>
+        <div v-if="platformData.length" style="height: 300px">
+          <v-chart :option="pieOption" autoresize />
+        </div>
+        <div v-else class="text-center text-gray-400 py-16 text-sm">暂无数据</div>
+      </div>
+    </div>
+
+    <!-- 店铺明细表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-sm font-medium text-gray-700">店铺明细</h3>
+        <select v-model="storeFilter" class="px-2 py-1 border border-gray-200 rounded-lg text-sm">
+          <option value="">全部店铺</option>
+          <option v-for="s in storeList" :key="s" :value="s">{{ s }}</option>
+        </select>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-gray-500 text-xs">
+              <th class="px-4 py-2 text-left">日期</th>
+              <th class="px-3 py-2 text-left">店铺</th>
+              <th class="px-3 py-2 text-left">平台</th>
+              <th class="px-3 py-2 text-right">订单数</th>
+              <th class="px-3 py-2 text-right">销售额</th>
+              <th class="px-3 py-2 text-right">退款</th>
+              <th class="px-3 py-2 text-right">净营业额</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in filteredTableData" :key="row.order_date + row.account_id" class="border-t border-gray-100 hover:bg-gray-50">
+              <td class="px-4 py-2 text-gray-600 text-xs">{{ row.order_date }}</td>
+              <td class="px-3 py-2 font-medium text-gray-800 text-xs">{{ row.store_name }}</td>
+              <td class="px-3 py-2 text-gray-500 text-xs">{{ platformLabel(row.ecommerce_platform) }}</td>
+              <td class="px-3 py-2 text-right">{{ row.order_count }}</td>
+              <td class="px-3 py-2 text-right text-blue-600">{{ formatNum(row.sales_amount) }}</td>
+              <td class="px-3 py-2 text-right text-red-400">{{ formatNum(row.refund_amount) }}</td>
+              <td class="px-3 py-2 text-right font-medium text-green-600">{{ formatNum(row.net_income) }}</td>
+            </tr>
+            <tr v-if="!filteredTableData.length" class="text-center text-gray-400 py-8">
+              <td colspan="7">暂无数据</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, onMounted } from 'vue'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { LineChart, PieChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
+import VChart from 'vue-echarts'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from '../stores/auth'
+
+use([CanvasRenderer, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent])
+
+const auth = useAuthStore()
+
+// 状态
+const dailyData = ref([])
+const storeFilter = ref('')
+const platformFilter = ref(['douyin', 'kuaishou', 'shipinhao'])
+const rangeStart = ref('')
+const rangeEnd = ref('')
+const activeRange = ref('')
+
+const PLATFORM_LABELS = { douyin: '抖音', kuaishou: '快手', shipinhao: '视频号', taobao: '淘宝', youzan: '有赞', other: '其他' }
+const platformTabs = [
+  { key: 'douyin', label: '抖音' },
+  { key: 'kuaishou', label: '快手' },
+  { key: 'shipinhao', label: '视频号' },
+]
+
+const dateOptions = [
+  { key: 'today', label: '今日' },
+  { key: '7days', label: '近7天' },
+  { key: '30days', label: '近30天' },
+  { key: 'month', label: '本月' },
+]
+
+// 日期计算
+function setDateRange(key) {
+  const today = new Date()
+  const fmt = d => d.toISOString().split('T')[0]
+  const dayMs = 86400000
+  activeRange.value = key
+  switch (key) {
+    case 'today': rangeStart.value = rangeEnd.value = fmt(today); break
+    case '7days': rangeStart.value = fmt(new Date(today.getTime() - 6 * dayMs)); rangeEnd.value = fmt(today); break
+    case '30days': rangeStart.value = fmt(new Date(today.getTime() - 29 * dayMs)); rangeEnd.value = fmt(today); break
+    case 'month':
+      rangeStart.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+      rangeEnd.value = fmt(today); break
+  }
+  loadData()
+}
+
+function togglePlatformFilter(key) {
+  const idx = platformFilter.value.indexOf(key)
+  if (idx >= 0) platformFilter.value.splice(idx, 1)
+  else platformFilter.value.push(key)
+}
+
+const rangeLabel = computed(() => {
+  if (!rangeStart.value) return ''
+  return rangeStart.value === rangeEnd.value ? rangeStart.value : `${rangeStart.value} ~ ${rangeEnd.value}`
+})
+
+// 数据
+const storeList = computed(() => [...new Set(dailyData.value.map(d => d.store_name))])
+
+const filteredData = computed(() => {
+  let data = dailyData.value
+  if (platformFilter.value.length) {
+    data = data.filter(d => platformFilter.value.includes(d.ecommerce_platform))
+  }
+  if (storeFilter.value) {
+    data = data.filter(d => d.store_name === storeFilter.value)
+  }
+  return data
+})
+
+const filteredTableData = computed(() => {
+  return [...filteredData.value].sort((a, b) => b.order_date.localeCompare(a.order_date) || a.store_name.localeCompare(b.store_name))
+})
+
+const summary = computed(() => {
+  const d = filteredData.value
+  return {
+    orders: d.reduce((s, r) => s + Number(r.order_count || 0), 0),
+    sales: d.reduce((s, r) => s + Number(r.sales_amount || 0), 0),
+    refund: d.reduce((s, r) => s + Number(r.refund_amount || 0), 0),
+    net: d.reduce((s, r) => s + Number(r.net_income || 0), 0),
+    pending: 0, // 后续填充
+  }
+})
+
+const platformData = computed(() => {
+  const map = {}
+  filteredData.value.forEach(d => {
+    const key = d.ecommerce_platform || 'other'
+    if (!map[key]) map[key] = 0
+    map[key] += Number(d.sales_amount || 0)
+  })
+  return Object.entries(map).map(([name, value]) => ({
+    name: PLATFORM_LABELS[name] || name,
+    value: Math.round(value * 100) / 100,
+  })).filter(d => d.value > 0).sort((a, b) => b.value - a.value)
+})
+
+// ECharts options
+const trendOption = computed(() => {
+  // 按日期汇总（分平台）
+  const dateMap = {}
+  filteredData.value.forEach(d => {
+    if (!dateMap[d.order_date]) dateMap[d.order_date] = {}
+    const p = PLATFORM_LABELS[d.ecommerce_platform] || d.ecommerce_platform
+    dateMap[d.order_date][p] = (dateMap[d.order_date][p] || 0) + Number(d.sales_amount || 0)
+  })
+  const dates = Object.keys(dateMap).sort()
+  const platforms = [...new Set(filteredData.value.map(d => PLATFORM_LABELS[d.ecommerce_platform] || d.ecommerce_platform))]
+  const series = platforms.map(p => ({
+    name: p,
+    type: 'line',
+    smooth: true,
+    symbol: 'circle',
+    symbolSize: 4,
+    data: dates.map(d => Math.round((dateMap[d]?.[p] || 0) * 100) / 100),
+  }))
+
+  return {
+    tooltip: { trigger: 'axis', valueFormatter: v => '¥' + Number(v || 0).toLocaleString() },
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    grid: { left: 50, right: 20, top: 10, bottom: 40 },
+    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, formatter: v => v.slice(5) } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 10, formatter: v => v >= 10000 ? (v / 10000).toFixed(1) + '万' : v } },
+    series,
+  }
+})
+
+const pieOption = computed(() => {
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+    legend: { bottom: 0, textStyle: { fontSize: 11 } },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      label: { formatter: '{b}\n{d}%', fontSize: 11 },
+      data: platformData.value,
+    }],
+  }
+})
+
+// 工具
+function formatNum(n) {
+  return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function platformLabel(key) {
+  return PLATFORM_LABELS[key] || key || '未知'
+}
+
+// 加载数据
+async function loadData() {
+  if (!rangeStart.value) return
+  const { data } = await supabase
+    .from('v_ecommerce_daily')
+    .select('*')
+    .gte('order_date', rangeStart.value)
+    .lte('order_date', rangeEnd.value)
+    .order('order_date', { ascending: false })
+  dailyData.value = data || []
+
+  // 加载待结算资金
+  const { data: accData } = await supabase
+    .from('accounts')
+    .select('balance')
+    .not('ecommerce_platform', 'is', null)
+    .eq('status', 'active')
+  summary.value.pending = (accData || []).reduce((s, a) => s + Number(a.balance || 0), 0)
+}
+
+onMounted(() => {
+  if (auth.isAuthenticated) {
+    setDateRange('7days')
+  }
+})
+</script>

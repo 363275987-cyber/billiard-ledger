@@ -28,6 +28,7 @@ const routes = [
       { path: 'legal-reports', name: 'LegalReports', component: () => import('../views/LegalReports.vue') },
       { path: 'coaching', name: 'Coaching', component: () => import('../views/Coaching.vue') },
       { path: 'platforms', name: 'Platforms', component: () => import('../views/Platforms.vue') },
+      { path: 'ecommerce-sales', name: 'EcommerceSales', component: () => import('../views/EcommerceSales.vue') },
       { path: 'shareholder-loans', name: 'ShareholderLoans', component: () => import('../views/ShareholderLoans.vue') },
       { path: 'logs', name: 'OperationLogs', component: () => import('../views/OperationLogs.vue'), meta: { title: '操作日志' } },
       { path: 'assets', name: 'AssetManagement', component: () => import('../views/AssetManagement.vue') },

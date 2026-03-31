@@ -430,7 +430,8 @@ async function loadTodayData() {
         .select('amount')
         .gte('created_at', startISO)
         .lte('created_at', endISO)
-        .is('deleted_at', null),
+        .is('deleted_at', null)
+        .is('platform_type', null),
       // 今日支出（今天已付款的支出）
       supabase
         .from('expenses')
@@ -444,7 +445,8 @@ async function loadTodayData() {
         .select('refund_amount')
         .gte('created_at', startISO)
         .lte('created_at', endISO)
-        .is('deleted_at', null),
+        .is('deleted_at', null)
+        .is('platform_type', null),
       // 今日新增客户
       supabase
         .from('customers')
@@ -457,7 +459,8 @@ async function loadTodayData() {
         .select('id', { count: 'exact', head: true })
         .gte('created_at', startISO)
         .lte('created_at', endISO)
-        .is('deleted_at', null),
+        .is('deleted_at', null)
+        .is('platform_type', null),
     ])
 
     const income = ordersRes.data?.reduce((s, r) => s + (Number(r.amount) || 0), 0) || 0
@@ -490,7 +493,8 @@ async function loadFinanceDashboard() {
       .select('amount')
       .eq('status', 'completed')
       .gte('created_at', start)
-      .lt('created_at', end),
+      .lt('created_at', end)
+      .is('platform_type', null),
     // 本月已审批/已付支出
     supabase
       .from('expenses')
@@ -504,7 +508,8 @@ async function loadFinanceDashboard() {
       .select('refund_amount')
       .eq('status', 'completed')
       .gte('created_at', start)
-      .lt('created_at', end),
+      .lt('created_at', end)
+      .is('platform_type', null),
     // 待审批笔数
     supabase
       .from('expenses')
@@ -515,6 +520,7 @@ async function loadFinanceDashboard() {
       .from('accounts')
       .select('id, code, platform, balance')
       .eq('status', 'active')
+      .is('ecommerce_platform', null)
       .order('balance', { ascending: false })
       .limit(5),
     // 最新订单
@@ -522,6 +528,7 @@ async function loadFinanceDashboard() {
       .from('orders')
       .select('id, amount, customer_name, product_category, created_at, customer, account_code')
       .order('created_at', { ascending: false })
+      .is('platform_type', null)
       .limit(5),
   ])
 
@@ -612,7 +619,8 @@ async function loadSalesDashboard(uid) {
       .neq('order_source', 'shared')
       .or(`sales_id.eq.${uid},creator_id.eq.${uid}`)
       .gte('created_at', start)
-      .lt('created_at', end),
+      .lt('created_at', end)
+      .is('platform_type', null),
     // 我的本月订单数
     supabase
       .from('orders')
@@ -620,13 +628,15 @@ async function loadSalesDashboard(uid) {
       .eq('status', 'completed')
       .or(`sales_id.eq.${uid},creator_id.eq.${uid},shared_sales_id.eq.${uid}`)
       .gte('created_at', start)
-      .lt('created_at', end),
+      .lt('created_at', end)
+      .is('platform_type', null),
     // 最新订单
     supabase
       .from('orders')
       .select('id, amount, customer_name, product_category, created_at, customer, account_code')
       .or(`sales_id.eq.${uid},creator_id.eq.${uid},shared_sales_id.eq.${uid}`)
       .order('created_at', { ascending: false })
+      .is('platform_type', null)
       .limit(5),
     // 平分单收入（金额按50%计）
     supabase
@@ -636,7 +646,8 @@ async function loadSalesDashboard(uid) {
       .eq('order_source', 'shared')
       .or(`sales_id.eq.${uid},shared_sales_id.eq.${uid}`)
       .gte('created_at', start)
-      .lt('created_at', end),
+      .lt('created_at', end)
+      .is('platform_type', null),
   ])
 
   const normalIncome = incRes.data?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0
