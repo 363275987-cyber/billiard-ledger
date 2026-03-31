@@ -27,25 +27,26 @@
     </div>
 
     <!-- 搜索过滤 -->
-    <div class="bg-white rounded-xl border border-gray-100 p-3 mb-4 flex gap-2 items-center flex-wrap">
-      <input v-model="filters.keyword" placeholder="搜索名称/品牌/SKU" class="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 min-w-[140px] outline-none focus:ring-2 focus:ring-blue-500" @keyup.enter="loadProducts" />
-      <select v-model="filters.product_type" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
-        <option value="">全部类型</option>
-        <option value="single">单品</option>
-        <option value="course">课程</option>
-        <option value="bundle">套装</option>
-        <option value="gift_bag">福袋</option>
-      </select>
-      <select v-model="filters.category" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
-        <option value="">全部分类</option>
-        <option v-for="(label, key) in PRODUCT_ITEM_CATEGORIES" :key="key" :value="key">{{ label }}</option>
-      </select>
-      <select v-model="filters.brand" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
-        <option value="">全部品牌</option>
-        <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
-      </select>
-      <button @click="loadProducts" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition cursor-pointer">搜索</button>
-      <span class="text-xs text-gray-400">{{ productStore.pagination.total }} 个</span>
+    <div class="bg-white rounded-xl border border-gray-100 p-3 mb-4">
+      <!-- Tab 切换 -->
+      <div class="flex gap-1 mb-3 border-b border-gray-100 pb-2">
+        <button @click="activeTab='single'; loadProducts()" :class="activeTab==='single' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer">🎱 单品 <span class="text-xs opacity-70">{{ summary.total - summary.bundle }}</span></button>
+        <button @click="activeTab='bundle'; loadProducts()" :class="activeTab==='bundle' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'" class="px-4 py-1.5 rounded-lg text-sm font-medium transition cursor-pointer">📦 套装 <span class="text-xs opacity-70">{{ summary.bundle }}</span></button>
+      </div>
+      <!-- 筛选行 -->
+      <div class="flex gap-2 items-center flex-wrap">
+        <input v-model="filters.keyword" placeholder="搜索名称/品牌/SKU" class="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 min-w-[140px] outline-none focus:ring-2 focus:ring-blue-500" @keyup.enter="loadProducts" />
+        <select v-model="filters.category" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+          <option value="">全部分类</option>
+          <option v-for="(label, key) in PRODUCT_ITEM_CATEGORIES" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <select v-model="filters.brand" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+          <option value="">全部品牌</option>
+          <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
+        </select>
+        <button @click="loadProducts" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition cursor-pointer">搜索</button>
+        <span class="text-xs text-gray-400">{{ productStore.pagination.total }} 个</span>
+      </div>
     </div>
 
     <!-- 产品卡片列表 -->
@@ -365,7 +366,8 @@ const canEdit = computed(() => ['admin', 'finance', 'manager'].includes(authStor
 
 const brands = ref([])
 const summary = reactive({ total: 0, cue: 0, accessory: 0, bundle: 0 })
-const filters = reactive({ keyword: '', product_type: '', category: '', brand: '' })
+const filters = reactive({ keyword: '', category: '', brand: '' })
+const activeTab = ref('single')
 const expandedIds = reactive({})      // 展开的卡片
 const skusMap = reactive({})           // productId → sku[]
 const bundleItemsMap = reactive({})    // bundleId → item[]
@@ -403,7 +405,7 @@ function bundleTotalCost(pid) {
 async function loadProducts() {
   await productStore.fetchProducts({
     keyword: filters.keyword || undefined,
-    product_type: filters.product_type || undefined,
+    product_type: activeTab.value,
     category: filters.category || undefined,
     brand: filters.brand || undefined,
     page: 1,
