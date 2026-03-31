@@ -29,18 +29,18 @@
     <!-- 搜索过滤 -->
     <div class="bg-white rounded-xl border border-gray-100 p-3 mb-4 flex gap-2 items-center flex-wrap">
       <input v-model="filters.keyword" placeholder="搜索名称/品牌/SKU" class="px-3 py-2 border border-gray-200 rounded-lg text-sm flex-1 min-w-[140px] outline-none focus:ring-2 focus:ring-blue-500" @keyup.enter="loadProducts" />
-      <select v-model="filters.product_type" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+      <select v-model="filters.product_type" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
         <option value="">全部类型</option>
         <option value="single">单品</option>
         <option value="course">课程</option>
         <option value="bundle">套装</option>
         <option value="gift_bag">福袋</option>
       </select>
-      <select v-model="filters.category" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+      <select v-model="filters.category" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
         <option value="">全部分类</option>
         <option v-for="(label, key) in PRODUCT_ITEM_CATEGORIES" :key="key" :value="key">{{ label }}</option>
       </select>
-      <select v-model="filters.brand" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
+      <select v-model="filters.brand" @change="loadProducts" class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none">
         <option value="">全部品牌</option>
         <option v-for="b in brands" :key="b" :value="b">{{ b }}</option>
       </select>
@@ -406,6 +406,8 @@ async function loadProducts() {
     product_type: filters.product_type || undefined,
     category: filters.category || undefined,
     brand: filters.brand || undefined,
+    page: 1,
+    pageSize: 1000,
   })
   // 批量加载所有 SKU（一次查询）
   const { data: allSkus } = await supabase.from('product_skus').select('*').order('sku_code')
