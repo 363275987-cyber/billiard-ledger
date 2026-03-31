@@ -119,11 +119,18 @@
               <div>
                 <span class="text-gray-400 text-xs">收款账户：</span>
                 <div class="flex items-center gap-1">
-                  <select v-model="order.account_id" class="border border-gray-200 rounded px-2 py-0.5 text-sm flex-1 bg-white cursor-pointer">
-                    <option value="">未指定</option>
-                    <option v-for="acc in orderAccountOptions" :key="acc.id" :value="acc.id">{{ acc.short_name || acc.code }}（¥{{ Number(acc.balance || 0).toFixed(0) }}）</option>
-                  </select>
+                  <input v-model="order._accountSearch" @focus="order._accDropdown = true" @input="order._accDropdown = true" @blur="order._accDropdown = false"
+                    class="border border-gray-200 rounded px-2 py-0.5 text-sm flex-1 bg-white cursor-pointer min-w-0"
+                    :placeholder="getAccountLabel(order.account_id)" />
                   <button @click="showQuickAddAccount = true" class="shrink-0 w-6 h-6 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-100 text-sm cursor-pointer" title="添加新账户">+</button>
+                  <div v-if="order._accDropdown && filterAccountsBySearch(order._accountSearch).length > 0"
+                    class="absolute z-30 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto min-w-[160px]">
+                    <div v-for="acc in filterAccountsBySearch(order._accountSearch).slice(0, 20)" :key="acc.id"
+                      @mousedown.prevent="order.account_id = acc.id; order._accountSearch = ''"
+                      class="px-2 py-1.5 text-sm hover:bg-blue-50 cursor-pointer whitespace-nowrap">
+                      {{ acc.short_name || acc.code }}（¥{{ Number(acc.balance || 0).toFixed(0) }}）
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="col-span-2">
@@ -177,7 +184,7 @@
               </div>
               <div>
                 <label class="block text-xs text-gray-500 mb-1">付款简称</label>
-                <input v-model="quickAccountForm.payment_alias" placeholder="如：南113珊（自动补'付'）" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                <input v-model="quickAccountForm.payment_alias" placeholder="如：南113珊" class="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label class="block text-xs text-gray-500 mb-1">平台</label>
@@ -533,15 +540,27 @@
           <!-- 收款账户 -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">收款账户</label>
-            <div class="flex items-center gap-2">
-              <select
-                v-model="form.account_id"
-                class="flex-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">未指定</option>
-                <option v-for="acc in orderAccountOptions" :key="acc.id" :value="acc.id">{{ acc.short_name }}（¥{{ Number(acc.balance || 0).toFixed(0) }}）</option>
-              </select>
-              <button @click="showQuickAddAccount = true" class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer" title="添加新账户">+</button>
+            <div class="relative">
+              <input
+                v-model="form.accountSearch"
+                @focus="accountDropdownOpen = true"
+                @input="accountDropdownOpen = true"
+                @blur="accountDropdownOpen = false"
+                placeholder="搜索账户名称/简称"
+                class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">{{ selectedAccountDisplay }}</div>
+              <div v-if="accountDropdownOpen && filteredAccounts.length > 0"
+                class="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div v-for="acc in filteredAccounts" :key="acc.id"
+                  @mousedown.prevent="selectAccount(acc)"
+                  class="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer flex justify-between items-center">
+                  <span>{{ acc.short_name || acc.code }}</span>
+                  <span class="text-xs text-gray-400">¥{{ Number(acc.balance || 0).toFixed(0) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
             </div>
           </div>
 
@@ -986,11 +1005,47 @@ const showTextMode = ref(false)
 const rawText = ref('')
 const parsedOrders = ref([])
 const orderAccountOptions = ref([])
+const accountDropdownOpen = ref(false)
 const submittingAll = ref(false)
 const parsedTotalAmount = computed(() => parsedOrders.value.reduce((sum, o) => sum + (Number(o.amount) || 0), 0))
 const parseError = ref('')
 const showQuickAddAccount = ref(false)
 const quickAccountForm = reactive({ short_name: '', payment_alias: '', platform: 'other' })
+
+// 收款账户搜索
+const filteredAccounts = computed(() => {
+  const kw = (form.accountSearch || '').trim().toLowerCase()
+  if (!kw) return orderAccountOptions.value
+  return orderAccountOptions.value.filter(a =>
+    (a.short_name || '').toLowerCase().includes(kw) ||
+    (a.code || '').toLowerCase().includes(kw) ||
+    (a.payment_alias || '').toLowerCase().includes(kw)
+  )
+})
+const selectedAccountDisplay = computed(() => {
+  if (!form.account_id) return ''
+  const acc = orderAccountOptions.value.find(a => a.id === form.account_id)
+  return acc ? `¥${Number(acc.balance || 0).toFixed(0)}` : ''
+})
+function selectAccount(acc) {
+  form.account_id = acc.id
+  form.accountSearch = ''
+  accountDropdownOpen.value = false
+}
+function getAccountLabel(accountId) {
+  if (!accountId) return '搜索账户'
+  const acc = orderAccountOptions.value.find(a => a.id === accountId)
+  return acc ? `${acc.short_name || acc.code}（¥${Number(acc.balance || 0).toFixed(0)}）` : '未匹配'
+}
+function filterAccountsBySearch(kw) {
+  kw = (kw || '').trim().toLowerCase()
+  if (!kw) return orderAccountOptions.value
+  return orderAccountOptions.value.filter(a =>
+    (a.short_name || '').toLowerCase().includes(kw) ||
+    (a.code || '').toLowerCase().includes(kw) ||
+    (a.payment_alias || '').toLowerCase().includes(kw)
+  )
+}
 
 async function quickCreateAccount() {
   const name = quickAccountForm.short_name.trim()
@@ -1001,7 +1056,6 @@ async function quickCreateAccount() {
       payment_alias: quickAccountForm.payment_alias?.trim() || null,
       balance: 0, opening_balance: 0, balance_method: 'manual', status: 'active',
     }
-    if (payload.payment_alias && !payload.payment_alias.endsWith('付')) payload.payment_alias += '付'
     await accountStore.createAccount(payload)
     accountStore._forceRefresh = true
     await accountStore.fetchAccounts()
@@ -1588,6 +1642,7 @@ const defaultForm = () => ({
   service_number: '',
   payment_method: 'wechat',
   account_id: '',
+  accountSearch: '',
   customer_name: '',
   customer_phone: '',
   customer_address: '',
@@ -1916,10 +1971,9 @@ function openModal(order = null) {
   showModal.value = true
   snSearch.value = ''
   snDropdownOpen.value = false
+  form.accountSearch = ''
+  accountDropdownOpen.value = false
 }
-
-
-// 手机号失焦时自动匹配老客户
 async function autoFillCustomer() {
   const phone = form.customer_phone?.trim()
   if (!phone || !/^1[3-9]\d{9}$/.test(phone)) return

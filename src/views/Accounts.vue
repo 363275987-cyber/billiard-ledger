@@ -776,12 +776,6 @@ async function batchAction(action) {
   }
 }
 
-function normalizePaymentAlias(val) {
-  const v = (val || '').trim()
-  if (!v) return null
-  return v.endsWith('付') ? v : v + '付'
-}
-
 function isIncomplete(acc) {
   return !acc.short_name || !acc.real_name || !acc.cert_phone || !acc.id_number
 }
@@ -847,7 +841,7 @@ async function saveAccount() {
         cert_phone: form.cert_phone?.trim() || null,
         id_number: form.id_number?.trim() || null,
         balance_method: form.balance_method,
-        payment_alias: normalizePaymentAlias(form.payment_alias),
+        payment_alias: (form.payment_alias?.trim() || null),
         note: form.note?.trim() || null,
       }
       // 手动模式下余额有变化，记录日志
@@ -914,7 +908,7 @@ async function saveAccount() {
         opening_balance: Number(form.balance) || 0,
         balance_method: 'manual',
         status: 'active',
-        payment_alias: normalizePaymentAlias(form.payment_alias),
+        payment_alias: (form.payment_alias?.trim() || null),
         note: form.note?.trim() || null,
       }
       await accountStore.createAccount(payload)
