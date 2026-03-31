@@ -27,22 +27,27 @@
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-4 gap-4 mb-5">
-      <div class="bg-white rounded-xl border border-gray-100 p-4">
-        <div class="text-xs text-gray-400 mb-1">📂 账户总数</div>
-        <div class="text-2xl font-bold text-gray-800">{{ stats.total }}</div>
+    <div class="grid grid-cols-3 gap-4 mb-5">
+      <div @click="filters.category = 'personal'"
+        :class="filters.category === 'personal' ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100'"
+        class="bg-white rounded-xl border p-4 cursor-pointer hover:shadow-sm transition">
+        <div class="text-xs text-gray-400 mb-1">👤 个人账户</div>
+        <div class="text-2xl font-bold" :class="personalTotal >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(personalTotal) }}</div>
+        <div class="text-xs text-gray-400 mt-1">{{ personalCount }} 个账户</div>
       </div>
-      <div class="bg-white rounded-xl border border-gray-100 p-4">
-        <div class="text-xs text-gray-400 mb-1">✅ 活跃账户</div>
-        <div class="text-2xl font-bold text-green-600">{{ stats.active }}</div>
+      <div @click="filters.category = 'company'"
+        :class="filters.category === 'company' ? 'border-blue-300 ring-2 ring-blue-100' : 'border-gray-100'"
+        class="bg-white rounded-xl border p-4 cursor-pointer hover:shadow-sm transition">
+        <div class="text-xs text-gray-400 mb-1">🏢 企业账户</div>
+        <div class="text-2xl font-bold" :class="companyTotal >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(companyTotal) }}</div>
+        <div class="text-xs text-gray-400 mt-1">{{ companyCount }} 个账户</div>
       </div>
-      <div class="bg-white rounded-xl border border-gray-100 p-4">
-        <div class="text-xs text-gray-400 mb-1">💰 总余额</div>
-        <div class="text-2xl font-bold" :class="stats.totalBalance >= 0 ? 'text-green-600' : 'text-red-500'">{{ formatMoney(stats.totalBalance) }}</div>
-      </div>
-      <div class="bg-white rounded-xl border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 p-4">
-        <div class="text-xs text-orange-400 mb-1">🛒 待结算资金（电商）</div>
+      <div @click="filters.category = 'ecommerce'"
+        :class="filters.category === 'ecommerce' ? 'border-orange-300 ring-2 ring-orange-100' : 'border-gray-100'"
+        class="bg-white rounded-xl border bg-gradient-to-br from-orange-50 to-amber-50 p-4 cursor-pointer hover:shadow-sm transition">
+        <div class="text-xs text-orange-400 mb-1">🛒 电商待结算</div>
         <div class="text-2xl font-bold text-orange-600">{{ formatMoney(ecommercePendingBalance) }}</div>
+        <div class="text-xs text-orange-300 mt-1">{{ ecommerceCount }} 个店铺</div>
       </div>
     </div>
 
@@ -79,8 +84,9 @@
         class="px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">全部分类</option>
-        <option value="company">🏢 企业账户</option>
         <option value="personal">👤 个人账户</option>
+        <option value="company">🏢 企业账户</option>
+        <option value="ecommerce">🛒 电商账户</option>
       </select>
       <button
         @click="filters.hideZeroBalance = !filters.hideZeroBalance"
@@ -449,7 +455,7 @@ const activeTab = ref('active')
 const filters = reactive({
   keyword: '',
   platform: '',
-  category: '',
+  category: 'personal',
   status: '',
   hideZeroBalance: false,
 })
@@ -560,8 +566,6 @@ const allAccounts = computed(() => accountStore.accounts)
 
 const filteredAccounts = computed(() => {
   return allAccounts.value.filter(acc => {
-    // 排除电商账户
-    if (acc.ecommerce_platform) return false
     // Tab 过滤
     if (activeTab.value === 'active' && acc.status !== 'active') return false
     if (activeTab.value === 'frozen' && acc.status !== 'frozen') return false
@@ -578,21 +582,26 @@ const filteredAccounts = computed(() => {
   })
 })
 
-const stats = computed(() => {
-  const all = allAccounts.value.filter(a => !a.ecommerce_platform)
-  return {
-    total: all.length,
-    active: all.filter(a => a.status === 'active').length,
-    totalBalance: all.reduce((sum, a) => sum + (Number(a.balance) || 0), 0),
-  }
+const personalTotal = computed(() => {
+  return allAccounts.value
+    .filter(a => !a.ecommerce_platform && getAccountCategory(a) === 'personal' && a.status === 'active')
+    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
 })
+const personalCount = computed(() => allAccounts.value.filter(a => !a.ecommerce_platform && getAccountCategory(a) === 'personal' && a.status === 'active').length)
+const companyTotal = computed(() => {
+  return allAccounts.value
+    .filter(a => !a.ecommerce_platform && getAccountCategory(a) === 'company' && a.status === 'active')
+    .reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
+})
+const companyCount = computed(() => allAccounts.value.filter(a => !a.ecommerce_platform && getAccountCategory(a) === 'company' && a.status === 'active').length)
 
 // 电商账户待结算资金（余额合计）
 const ecommercePendingBalance = computed(() => {
   return allAccounts.value
-    .filter(a => a.ecommerce_platform)
+    .filter(a => a.ecommerce_platform && a.status === 'active')
     .reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
 })
+const ecommerceCount = computed(() => allAccounts.value.filter(a => a.ecommerce_platform && a.status === 'active').length)
 
 // --- Methods ---
 function highlightKeyword(text) {
