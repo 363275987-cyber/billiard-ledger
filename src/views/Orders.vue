@@ -1048,13 +1048,14 @@ import { useAuthStore } from '../stores/auth'
 import { useOrderStore } from '../stores/orders'
 import { useProductStore } from '../stores/products'
 import { useAccountStore } from '../stores/accounts'
-import { formatMoney, PRODUCT_CATEGORIES, ORDER_STATUS, ORDER_SOURCE as ORDER_SOURCE_LABELS, toast, formatDate, debounce, PRODUCT_ITEM_CATEGORIES } from '../lib/utils'
+import { formatMoney, PRODUCT_CATEGORIES, ORDER_STATUS, ORDER_SOURCE as ORDER_SOURCE_LABELS, toast, formatDate, PRODUCT_ITEM_CATEGORIES } from '../lib/utils'
 import { parseOrderText, parsedToForm } from '../lib/orderParser'
 import { parseExcelFile, autoMatchColumns, downloadTemplate, mapRowsToOrders, IMPORT_FIELDS } from '../lib/excelImporter'
 import { parseJstExcel, parseDoudianExcel, detectExcelFormat, getFormatLabel, autoMatchJstColumns, autoMatchDoudianColumns, mapJstRowsToOrders, mapDoudianRowsToOrders, matchProduct } from '../lib/excelOrderImporter'
 import { platformTypeName } from '../lib/ecommerceOrderImporter'
 import { randomPick, randomPhone, randomName, randomAddress, randomAmount, PRODUCT_CATEGORIES_LIST, PRODUCT_NAMES_BY_CATEGORY } from '../lib/testDataHelper'
 import { usePermission } from '../composables/usePermission'
+import { useOrderList } from '../composables/useOrderList'
 import Skeleton from '../components/Skeleton.vue'
 import GiftSelector from '../components/GiftSelector.vue'
 import EcomImportButton from '../components/EcomImportButton.vue'
@@ -1064,30 +1065,27 @@ const { canDelete, canSeeCost, isAdmin: permIsAdmin, loadRole } = usePermission(
 
 // ---------- stores ----------
 const authStore = useAuthStore()
-const orderStore = useOrderStore()
 const productStore = useProductStore()
 const accountStore = useAccountStore()
+
+// ---------- order list composable ----------
+const {
+  orderStore,
+  activeTab, orderTabs, filteredOrders,
+  selectedOrders, canDeleteOrders, isAllSelected, toggleSelectAll, canDeleteOrder,
+  filters,
+  loadOrders,
+  totalPages, displayPages, goPage,
+  ecomPlatformTagClass, platformTypeTagLabel, platformTypeTagClass,
+  getAccountName, getAccountShortName,
+  handleConfirmPayment, handleCancel, handleDelete, handleBatchDelete,
+} = useOrderList(authStore)
 
 // ---------- permissions ----------
 const isFinance = computed(() => authStore.isFinance)
 const isAdmin = computed(() => authStore.isAdmin)
 const canEdit = computed(() => isAdmin.value || isFinance.value || authStore.isSales)
 const canCreate = computed(() => isAdmin.value || isFinance.value || authStore.isSales || authStore.isCS)
-
-// ---------- Tab 筛选 ----------
-const activeTab = ref('all')
-const orderTabs = [
-  { key: 'all', label: '全部订单' },
-  { key: 'private', label: '私域订单' },
-  { key: 'ecommerce', label: '电商订单' },
-]
-
-const filteredOrders = computed(() => {
-  const list = orderStore.orders
-  if (activeTab.value === 'private') return list.filter(o => !o.platform_type)
-  if (activeTab.value === 'ecommerce') return list.filter(o => !!o.platform_type)
-  return list
-})
 
 // ---------- text mode ----------
 const showTextMode = ref(false)
@@ -1430,27 +1428,6 @@ async function handleExportOrders() {
   }
 }
 
-// ---------- delete ----------
-const selectedOrders = ref([])
-const canDeleteOrders = computed(() => isAdmin.value || isFinance.value || authStore.isSales)
-const isAllSelected = computed(() => filteredOrders.value.length > 0 && selectedOrders.value.length === filteredOrders.value.length)
-
-function toggleSelectAll(e) {
-  if (e.target.checked) {
-    selectedOrders.value = filteredOrders.value.map(o => o.id)
-  } else {
-    selectedOrders.value = []
-  }
-}
-
-function canDeleteOrder(order) {
-  if (isAdmin.value || isFinance.value) return true
-  if (authStore.isSales) {
-    return order.created_by === authStore.profile?.id
-  }
-  return false
-}
-
 // ---------- stats ----------
 const stats = reactive({ todayCount: 0, monthCount: 0, monthAmount: 0 })
 
@@ -1538,39 +1515,6 @@ async function loadStats() {
   }
 }
 
-// ---------- filters ----------
-const filters = reactive({
-  keyword: '',
-  searchField: '',
-  category: '',
-  status: '',
-  dateFrom: '',
-  dateTo: '',
-})
-
-// Watch filters for auto-reload (debounced)
-const debouncedLoad = debounce(() => loadOrders(), 300)
-watch(
-  () => [filters.category, filters.status, filters.dateFrom, filters.dateTo],
-  () => debouncedLoad()
-)
-
-// ---------- load orders ----------
-async function loadOrders() {
-  // 转义搜索关键词，防止 PostgREST 注入
-  const safeKeyword = (filters.keyword || '').replace(/[,%().*]/g, '')
-  await orderStore.fetchOrders({
-    keyword: safeKeyword || undefined,
-    searchField: filters.searchField || undefined,
-    category: filters.category || undefined,
-    status: filters.status || undefined,
-    dateFrom: filters.dateFrom || undefined,
-    dateTo: filters.dateTo || undefined,
-    page: orderStore.pagination.page,
-    pageSize: orderStore.pagination.pageSize,
-  })
-}
-
 // ---------- service numbers ----------
 const serviceNumbers = ref([])
 const snSearch = ref('')
@@ -1600,28 +1544,7 @@ const paymentMethodColors = {
 
 function paymentMethodLabel(m) { return paymentMethodLabels[m] || m || '' }
 function paymentMethodClass(m) { return paymentMethodColors[m] || paymentMethodColors.other }
-function getAccountName(accountId) {
-  const acc = accountStore.accounts.find(a => a.id === accountId)
-  return acc ? (acc.short_name || acc.code) : '未知账户'
-}
-function getAccountShortName(accountId) {
-  const acc = accountStore.accounts.find(a => a.id === accountId)
-  return acc ? (acc.short_name || acc.code) : '—'
-}
-
-// 平台标签（电商订单专用，Keep运动风格小标签）
-function platformTypeTagLabel(p) {
-  const labels = { douyin: '抖音', kuaishou: '快手', shipinhao: '视频号' }
-  return labels[p] || p || ''
-}
-function platformTypeTagClass(p) {
-  const classes = {
-    douyin: 'bg-pink-100 text-pink-700',
-    kuaishou: 'bg-orange-100 text-orange-700',
-    shipinhao: 'bg-green-100 text-green-700',
-  }
-  return classes[p] || 'bg-gray-100 text-gray-500'
-}
+// ---------- payment method helpers ----------
 
 const availableServiceNumbers = computed(() => {
   const list = serviceNumbers.value
@@ -2272,87 +2195,6 @@ async function handleSubmit() {
   }
 }
 
-// ---------- actions ----------
-async function handleConfirmPayment(order) {
-  if (!confirm(`确认已收到款项 ¥${Number(order.amount).toLocaleString()}？\n\n客户：${order.customer_name}\n产品：${order.product_name}`)) return
-  try {
-    const { error } = await supabase.from('orders').update({ status: 'completed' }).eq('id', order.id)
-    if (error) throw error
-    order.status = 'completed'
-    toast('已确认收款', 'success')
-    loadOrders()
-  } catch (e) {
-    toast('操作失败：' + (e.message || ''), 'error')
-  }
-}
-
-async function handleCancel(order) {
-  if (!confirm('确定要取消此订单吗？')) return
-  try {
-    await orderStore.updateOrder(order.id, { status: 'cancelled' })
-    toast('订单已取消', 'success')
-    loadStats()
-    loadOrders()
-  } catch (e) {
-    toast(e.message || '操作失败', 'error')
-  }
-}
-
-async function handleDelete(order) {
-  if (!confirm('确定要删除此订单吗？此操作不可恢复。')) return
-  try {
-    await orderStore.deleteOrder(order)
-    toast('订单已删除', 'success')
-    selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
-    loadStats()
-    loadOrders()
-  } catch (e) {
-    toast(e.message || '操作失败', 'error')
-  }
-}
-
-async function handleBatchDelete() {
-  if (!selectedOrders.value.length) return
-  if (!confirm(`确定要删除选中的 ${selectedOrders.value.length} 条订单吗？`)) return
-  try {
-    const { error } = await supabase.from('orders').delete().in('id', selectedOrders.value)
-    if (error) throw error
-    toast(`已删除 ${selectedOrders.value.length} 条订单`, 'success')
-    selectedOrders.value = []
-    loadStats()
-    loadOrders()
-  } catch (e) {
-    toast('批量删除失败：' + (e.message || ''), 'error')
-  }
-}
-
-// ---------- pagination ----------
-const totalPages = computed(() => {
-  const { total, pageSize } = orderStore.pagination
-  return Math.max(1, Math.ceil(total / pageSize))
-})
-
-function calcDisplayPages(current, total) {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const pages = []
-  pages.push(1)
-  if (current > 3) pages.push('...')
-  const start = Math.max(2, current - 1)
-  const end = Math.min(total - 1, current + 1)
-  for (let i = start; i <= end; i++) pages.push(i)
-  if (current < total - 2) pages.push('...')
-  if (total > 1) pages.push(total)
-  return pages
-}
-
-const displayPages = computed(() => calcDisplayPages(orderStore.pagination.page, totalPages.value))
-
-function goPage(p) {
-  if (p < 1 || p > totalPages.value) return
-  orderStore.pagination.page = p
-  loadOrders()
-}
-
 // ---------- Excel Import (聚水潭格式) ----------
 const showImportModal = ref(false)
 const isDraggingFile = ref(false)
@@ -2368,16 +2210,6 @@ const jstColumnMap = ref({})
 const previewFilter = ref('')
 const previewStatusFilter = ref('')
 const previewPlatformFilter = ref('')
-
-// ---------- E-commerce Import: Tag Helper (used in main order list) ----------
-function ecomPlatformTagClass(p) {
-  const classes = {
-    douyin: 'bg-pink-50 text-pink-600',
-    kuaishou: 'bg-orange-50 text-orange-600',
-    shipinhao: 'bg-green-50 text-green-600',
-  }
-  return classes[p] || 'bg-gray-100 text-gray-500'
-}
 
 // 产品库缓存（用于匹配）
 const allProductsCache = ref([])
