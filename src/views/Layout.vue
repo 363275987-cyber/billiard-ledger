@@ -268,6 +268,7 @@ const menuGroups = computed(() => {
       label: '系统',
       items: [
         { label: '用户管理', path: '/users' },
+        { label: '操作日志', path: '/logs' },
         { label: '系统设置', path: '/settings' },
       ],
     })
